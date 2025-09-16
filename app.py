@@ -44,7 +44,8 @@ def update_status():
     acao = data.get('acao')
     
     # Prepara os dados de status e log
-    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # ALTERAÇÃO FEITA AQUI:
+    now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     
     new_status = {
         'timestamp': now_str

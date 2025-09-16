@@ -17,7 +17,49 @@
         .angelica-audi { background-color: #17a2b8; color: white; }
         .angelica-fit { background-color: #ffc107; color: black; }
         .nicolas-fit { background-color: #6c757d; color: white; }
-        .saida { background-color: #fd7e14; color: white; grid-column: 1 / -1; } /* Ocupa as duas colunas */
+        .saida { background-color: #fd7e14; color: white; grid-column: 1 / -1; }
+
+        /* --- Estilos do Modal (genérico) --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none; /* Inicia oculto */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .modal-actions button {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .modal-actions button:last-child {
+            margin-bottom: 0;
+        }
+        .btn-close {
+            background-color: #6c757d;
+            color: white;
+            margin-top: 15px;
+        }
+        .btn-force-occupy {
+            background-color: #ffc107;
+            color: black;
+        }
     </style>
 </head>
 <body>
@@ -28,19 +70,45 @@
     </div>
 
     <div id="actions">
-        <button class="eu-audi" onclick="update('Willian', 'Audi', 'ENTRADA')">Willian (Audi) Chegou</button>
-        <button class="nicolas-fit" onclick="update('Nicolas', 'Fit', 'ENTRADA')">Nicolas (Fit) Chegou</button>
-        <button class="angelica-audi" onclick="update('Angelica', 'Audi', 'ENTRADA')">Angelica (Audi) Chegou</button>
-        <button class="angelica-fit" onclick="update('Angelica', 'Fit', 'ENTRADA')">Angelica (Fit) Chegou</button>
+        <button class="eu-audi" onclick="tryToOccupy('Willian', 'Audi')">Willian (Audi) Chegou</button>
+        <button class="nicolas-fit" onclick="tryToOccupy('Nicolas', 'Fit')">Nicolas (Fit) Chegou</button>
+        <button class="angelica-audi" onclick="tryToOccupy('Angelica', 'Audi')">Angelica (Audi) Chegou</button>
+        <button class="angelica-fit" onclick="tryToOccupy('Angelica', 'Fit')">Angelica (Fit) Chegou</button>
 
-        <button class="saida" onclick="update(prompt('Quem está saindo? (Willian, Angelica, Nicolas)'), 'Qualquer', 'SAIDA')">Liberei a Garagem</button>
+        <button class="saida" onclick="openSaidaModal()">Liberei a Garagem</button>
     </div>
+
+    <div id="saida-modal" class="modal-overlay" onclick="closeSaidaModal()">
+        <div class="modal-content" onclick="event.stopPropagation();">
+            <h3>Quem está saindo?</h3>
+            <div class="modal-actions">
+                <button class="eu-audi" onclick="confirmarSaida('Willian')">Willian</button>
+                <button class="angelica-audi" onclick="confirmarSaida('Angelica')">Angelica</button>
+                <button class="nicolas-fit" onclick="confirmarSaida('Nicolas')">Nicolas</button>
+                <button class="btn-close" onclick="closeSaidaModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="warning-modal" class="modal-overlay" onclick="closeWarningModal()">
+        <div class="modal-content" onclick="event.stopPropagation();">
+            <h3 id="warning-modal-text">A vaga já está ocupada.</h3>
+            <div class="modal-actions">
+                <button id="force-occupy-btn" class="btn-force-occupy">Liberar e Ocupar mesmo assim</button>
+                <button class="btn-close" onclick="closeWarningModal()">Voltar</button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         const statusBox = document.getElementById('status-box');
         const statusText = document.getElementById('status-text');
         const statusDetails = document.getElementById('status-details');
+        const saidaModal = document.getElementById('saida-modal');
+        const warningModal = document.getElementById('warning-modal'); // Novo modal
 
+        // --- Funções Principais de API e Status ---
         async function fetchStatus() {
             const response = await fetch('/api/status');
             const data = await response.json();
@@ -53,10 +121,11 @@
                 statusDetails.textContent = `Liberada por último por ${data.pessoa} em ${data.timestamp}`;
                 statusBox.className = 'livre';
             }
+            return data; // Retorna os dados para uso em outras funções
         }
 
         async function update(pessoa, carro, acao) {
-            if (acao === 'SAIDA' && !pessoa) return; // Cancela se o prompt de saída for vazio
+            if (!pessoa) return;
 
             const response = await fetch('/api/update', {
                 method: 'POST',
@@ -65,11 +134,53 @@
             });
             
             if (response.ok) {
-                fetchStatus(); // Atualiza a tela após a ação
+                fetchStatus();
             } else {
                 alert('Erro ao atualizar o status.');
             }
         }
+
+        // --- NOVA LÓGICA DE OCUPAÇÃO ---
+        async function tryToOccupy(novaPessoa, novoCarro) {
+            const currentStatus = await fetchStatus();
+
+            if (currentStatus.status === 'LIVRE') {
+                // Se estiver livre, ocupa normalmente
+                update(novaPessoa, novoCarro, 'ENTRADA');
+            } else {
+                // Se estiver ocupada, abre o modal de aviso
+                const warningText = document.getElementById('warning-modal-text');
+                warningText.textContent = `Vaga ocupada por ${currentStatus.pessoa}. Deseja continuar?`;
+                
+                const forceButton = document.getElementById('force-occupy-btn');
+                // Armazena os dados necessários para a ação no próprio botão
+                forceButton.onclick = () => forceOccupy(novaPessoa, novoCarro, currentStatus.pessoa, currentStatus.carro);
+
+                openWarningModal();
+            }
+        }
+
+        async function forceOccupy(novaPessoa, novoCarro, pessoaAntiga, carroAntigo) {
+            // Passo 1: Registra a SAÍDA do carro antigo, atribuindo a ação à nova pessoa.
+            await update(novaPessoa, carroAntigo, 'SAIDA');
+            
+            // Passo 2: Registra a ENTRADA do novo carro.
+            await update(novaPessoa, novoCarro, 'ENTRADA');
+
+            closeWarningModal();
+        }
+
+        // --- Funções do Modal de Saída ---
+        function openSaidaModal() { saidaModal.style.display = 'flex'; }
+        function closeSaidaModal() { saidaModal.style.display = 'none'; }
+        function confirmarSaida(pessoa) {
+            update(pessoa, 'Qualquer', 'SAIDA');
+            closeSaidaModal();
+        }
+
+        // --- Funções do NOVO Modal de Aviso ---
+        function openWarningModal() { warningModal.style.display = 'flex'; }
+        function closeWarningModal() { warningModal.style.display = 'none'; }
 
         // Carrega o status inicial ao abrir a página
         fetchStatus();
