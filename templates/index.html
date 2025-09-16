@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status da Garagem</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; }
+        #status-box { margin-top: 20px; padding: 30px; border-radius: 10px; text-align: center; color: white; width: 80%; max-width: 400px; }
+        .ocupada { background-color: #dc3545; }
+        .livre { background-color: #28a745; }
+        h1 { margin: 0; }
+        p { margin-top: 5px; font-size: 0.9em; }
+        #actions { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 90%; max-width: 500px;}
+        button { padding: 20px; font-size: 1em; border: none; border-radius: 8px; cursor: pointer; }
+        .eu-audi { background-color: #007bff; color: white; }
+        .angelica-audi { background-color: #17a2b8; color: white; }
+        .angelica-fit { background-color: #ffc107; color: black; }
+        .nicolas-fit { background-color: #6c757d; color: white; }
+        .saida { background-color: #fd7e14; color: white; grid-column: 1 / -1; } /* Ocupa as duas colunas */
+    </style>
+</head>
+<body>
+
+    <div id="status-box">
+        <h1 id="status-text">Carregando...</h1>
+        <p id="status-details"></p>
+    </div>
+
+    <div id="actions">
+        <button class="eu-audi" onclick="update('Willian', 'Audi', 'ENTRADA')">Willian (Audi) Chegou</button>
+        <button class="nicolas-fit" onclick="update('Nicolas', 'Fit', 'ENTRADA')">Nicolas (Fit) Chegou</button>
+        <button class="angelica-audi" onclick="update('Angelica', 'Audi', 'ENTRADA')">Angelica (Audi) Chegou</button>
+        <button class="angelica-fit" onclick="update('Angelica', 'Fit', 'ENTRADA')">Angelica (Fit) Chegou</button>
+
+        <button class="saida" onclick="update(prompt('Quem está saindo? (Willian, Angelica, Nicolas)'), 'Qualquer', 'SAIDA')">Liberei a Garagem</button>
+    </div>
+
+    <script>
+        const statusBox = document.getElementById('status-box');
+        const statusText = document.getElementById('status-text');
+        const statusDetails = document.getElementById('status-details');
+
+        async function fetchStatus() {
+            const response = await fetch('/api/status');
+            const data = await response.json();
+            
+            statusText.textContent = `GARAGEM ${data.status}`;
+            if (data.status === 'OCUPADA') {
+                statusDetails.textContent = `Por ${data.pessoa} com o ${data.carro} desde ${data.timestamp}`;
+                statusBox.className = 'ocupada';
+            } else {
+                statusDetails.textContent = `Liberada por último por ${data.pessoa} em ${data.timestamp}`;
+                statusBox.className = 'livre';
+            }
+        }
+
+        async function update(pessoa, carro, acao) {
+            if (acao === 'SAIDA' && !pessoa) return; // Cancela se o prompt de saída for vazio
+
+            const response = await fetch('/api/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pessoa, carro, acao })
+            });
+            
+            if (response.ok) {
+                fetchStatus(); // Atualiza a tela após a ação
+            } else {
+                alert('Erro ao atualizar o status.');
+            }
+        }
+
+        // Carrega o status inicial ao abrir a página
+        fetchStatus();
+    </script>
+</body>
+</html>
