@@ -1,89 +1,80 @@
 import os
+import csv
+import json
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-from sqlalchemy import create_engine, text
+from zoneinfo import ZoneInfo # IMPORTANTE: Adicione esta linha
 
 app = Flask(__name__)
 
-# Pega a URL do banco de dados do ambiente. O Render vai injetar isso.
-DATABASE_URL = os.environ.get('DATABASE_URL')
-engine = create_engine(DATABASE_URL)
+# Caminhos para os arquivos de dados
+STATUS_FILE = 'status.json'
+LOG_FILE = 'log.csv'
 
-# Função para garantir que as tabelas existam
-def initialize_database():
-    with engine.connect() as conn:
-        # Tabela para o status atual (apenas 1 linha)
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS status (
-                id INT PRIMARY KEY,
-                status VARCHAR(20),
-                carro VARCHAR(50),
-                pessoa VARCHAR(50),
-                timestamp VARCHAR(50)
-            );
-        """))
-        # Tabela para o log
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS log (
-                id SERIAL PRIMARY KEY,
-                timestamp VARCHAR(50),
-                pessoa VARCHAR(50),
-                carro VARCHAR(50),
-                acao VARCHAR(20)
-            );
-        """))
-        # Insere a linha inicial de status se não existir
-        result = conn.execute(text("SELECT COUNT(*) FROM status;")).scalar()
-        if result == 0:
-            conn.execute(text("INSERT INTO status VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
-        conn.commit()
+# Função para garantir que os arquivos de dados existam
+def initialize_data_files():
+    # Garante a existência do arquivo de status
+    if not os.path.exists(STATUS_FILE):
+        with open(STATUS_FILE, 'w') as f:
+            json.dump({'status': 'LIVRE', 'carro': 'Nenhum', 'pessoa': 'Ninguém', 'timestamp': ''}, f)
+    
+    # Garante a existência e o cabeçalho do arquivo de log
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['timestamp', 'pessoa', 'carro', 'acao'])
 
+# Rota principal: exibe a página web
+@app.route('/')
+def index():
+    return render_template('index.html')
 
+# API: retorna o status atual da garagem
 @app.route('/api/status')
 def get_status():
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
-        status_data = {
-            "status": result[0], "carro": result[1], "pessoa": result[2], "timestamp": result[3]
-        }
+    with open(STATUS_FILE, 'r') as f:
+        status_data = json.load(f)
     return jsonify(status_data)
 
+# API: atualiza o status e escreve no log
 @app.route('/api/update', methods=['POST'])
 def update_status():
     data = request.json
     pessoa = data.get('pessoa')
     carro = data.get('carro')
     acao = data.get('acao')
-    now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+    
+    # Prepara os dados de status e log
+    # ALTERAÇÃO FEITA AQUI:
+    fuso_horario_local = ZoneInfo("America/Sao_Paulo")
+    agora_local = datetime.now(fuso_horario_local)
+    now_str = agora_local.strftime('%d/%m/%Y %H:%M:%S')
+    
+    new_status = {
+        'timestamp': now_str
+    }
+    
+    if acao == 'ENTRADA':
+        new_status['status'] = 'OCUPADA'
+        new_status['carro'] = carro
+        new_status['pessoa'] = pessoa
+    else: # SAIDA
+        new_status['status'] = 'LIVRE'
+        new_status['carro'] = 'Nenhum'
+        new_status['pessoa'] = pessoa # Registra quem liberou
 
-    with engine.connect() as conn:
-        # Insere no log
-        conn.execute(text(
-            "INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"),
-            {"ts": now_str, "p": pessoa, "c": carro, "a": acao}
-        )
-        # Atualiza o status
-        if acao == 'ENTRADA':
-            conn.execute(text(
-                "UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"),
-                {"c": carro, "p": pessoa, "ts": now_str}
-            )
-        else: # SAIDA
-            conn.execute(text(
-                "UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"),
-                {"p": pessoa, "ts": now_str}
-            )
-        conn.commit()
+    # Atualiza o arquivo de status
+    with open(STATUS_FILE, 'w') as f:
+        json.dump(new_status, f)
+        
+    # Adiciona a entrada no log CSV
+    with open(LOG_FILE, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([now_str, pessoa, carro, acao])
+        
+    return jsonify({'message': 'Status atualizado com sucesso!', 'new_status': new_status})
 
-    return jsonify({'message': 'Status atualizado com sucesso!'})
-
-# ... (o resto do seu código, como a rota '/')
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-initialize_database()
-
-# O __main__ não é usado pelo Render, mas é bom para testes locais
 if __name__ == '__main__':
+    initialize_data_files()
+    # Para acessar de outros dispositivos na mesma rede, use 0.0.0.0
     app.run(host='0.0.0.0', port=5000)
