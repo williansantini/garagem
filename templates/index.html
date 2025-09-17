@@ -4,65 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Status da Garagem</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#007bff"/>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; }
-        #status-box { margin-top: 20px; padding: 30px; border-radius: 10px; text-align: center; color: white; width: 80%; max-width: 400px; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; padding: 10px; }
+        #status-box { margin-top: 20px; padding: 30px; border-radius: 10px; text-align: center; color: white; width: 90%; max-width: 400px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .ocupada { background-color: #dc3545; }
         .livre { background-color: #28a745; }
-        h1 { margin: 0; }
+        h1 { margin: 0; font-size: 1.8em; }
         p { margin-top: 5px; font-size: 0.9em; }
-        #actions { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 90%; max-width: 500px;}
-        button { padding: 20px; font-size: 1em; border: none; border-radius: 8px; cursor: pointer; }
+        #actions { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 500px;}
+        button { padding: 20px; font-size: 1em; border: none; border-radius: 8px; cursor: pointer; transition: transform 0.1s ease; }
+        button:active { transform: scale(0.95); }
         .eu-audi { background-color: #007bff; color: white; }
         .angelica-audi { background-color: #17a2b8; color: white; }
         .angelica-fit { background-color: #ffc107; color: black; }
         .nicolas-fit { background-color: #6c757d; color: white; }
         .saida { background-color: #fd7e14; color: white; grid-column: 1 / -1; }
-
-        /* --- Estilos do Modal (genérico) --- */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            display: none; /* Inicia oculto */
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-        }
-        .modal-content h3 {
-            margin-top: 0;
-            margin-bottom: 20px;
-        }
-        .modal-actions button {
-            width: 100%;
-            margin-bottom: 10px;
-        }
-        .modal-actions button:last-child {
-            margin-bottom: 0;
-        }
-        .btn-close {
-            background-color: #6c757d;
-            color: white;
-            margin-top: 15px;
-        }
-        .btn-force-occupy {
-            background-color: #ffc107;
-            color: black;
-        }
     </style>
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#007bff"/>
 </head>
 <body>
 
@@ -72,49 +31,25 @@
     </div>
 
     <div id="actions">
-        <button class="eu-audi" onclick="tryToOccupy('Willian', 'Audi')">Willian (Audi) Chegou</button>
-        <button class="nicolas-fit" onclick="tryToOccupy('Nicolas', 'Fit')">Nicolas (Fit) Chegou</button>
-        <button class="angelica-audi" onclick="tryToOccupy('Angelica', 'Audi')">Angelica (Audi) Chegou</button>
-        <button class="angelica-fit" onclick="tryToOccupy('Angelica', 'Fit')">Angelica (Fit) Chegou</button>
-
-        <button class="saida" onclick="openSaidaModal()">Liberei a Garagem</button>
+        <button class="eu-audi" onclick="tryToOccupy('Willian', 'Audi')">Willian (Audi)</button>
+        <button class="nicolas-fit" onclick="tryToOccupy('Nicolas', 'Fit')">Nicolas (Fit)</button>
+        <button class="angelica-audi" onclick="tryToOccupy('Angelica', 'Audi')">Angelica (Audi)</button>
+        <button class="angelica-fit" onclick="tryToOccupy('Angelica', 'Fit')">Angelica (Fit)</button>
+        <button class="saida" onclick="update('Sistema', 'Qualquer', 'SAIDA')">Liberei a Garagem</button>
     </div>
 
-    <div id="saida-modal" class="modal-overlay" onclick="closeSaidaModal()">
-        <div class="modal-content" onclick="event.stopPropagation();">
-            <h3>Quem está saindo?</h3>
-            <div class="modal-actions">
-                <button class="eu-audi" onclick="confirmarSaida('Willian')">Willian</button>
-                <button class="angelica-audi" onclick="confirmarSaida('Angelica')">Angelica</button>
-                <button class="nicolas-fit" onclick="confirmarSaida('Nicolas')">Nicolas</button>
-                <button class="btn-close" onclick="closeSaidaModal()">Cancelar</button>
-            </div>
-        </div>
+    <div style="margin-top: 20px; text-align: center;">
+        <button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: #333; color: white; border: none; border-radius: 8px;">
+            Ativar Notificações
+        </button>
     </div>
-
-    <div id="warning-modal" class="modal-overlay" onclick="closeWarningModal()">
-        <div class="modal-content" onclick="event.stopPropagation();">
-            <h3 id="warning-modal-text">A vaga já está ocupada.</h3>
-            <div class="modal-actions">
-                <button id="force-occupy-btn" class="btn-force-occupy">Liberar e Ocupar mesmo assim</button>
-                <button class="btn-close" onclick="closeWarningModal()">Voltar</button>
-            </div>
-        </div>
-    </div>
-
 
     <script>
         const statusBox = document.getElementById('status-box');
         const statusText = document.getElementById('status-text');
         const statusDetails = document.getElementById('status-details');
-        const saidaModal = document.getElementById('saida-modal');
-        const warningModal = document.getElementById('warning-modal'); // Novo modal
 
-        // --- Funções Principais de API e Status ---
-        async function fetchStatus() {
-            const response = await fetch('/api/status');
-            const data = await response.json();
-            
+        function updateStatusDisplay(data) {
             statusText.textContent = `GARAGEM ${data.status}`;
             if (data.status === 'OCUPADA') {
                 statusDetails.textContent = `Por ${data.pessoa} com o ${data.carro} desde ${data.timestamp}`;
@@ -123,153 +58,111 @@
                 statusDetails.textContent = `Liberada por último por ${data.pessoa} em ${data.timestamp}`;
                 statusBox.className = 'livre';
             }
-            return data; // Retorna os dados para uso em outras funções
         }
 
         async function update(pessoa, carro, acao) {
-            if (!pessoa) return;
-
-            const response = await fetch('/api/update', {
+            // Apenas envia a requisição. A atualização visual virá via SSE.
+            await fetch('/api/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pessoa, carro, acao })
             });
-            
-            if (response.ok) {
-                fetchStatus();
-            } else {
-                alert('Erro ao atualizar o status.');
-            }
         }
-
-        // --- NOVA LÓGICA DE OCUPAÇÃO ---
+        
+        // Esta função agora precisa buscar o status atual antes de agir
         async function tryToOccupy(novaPessoa, novoCarro) {
-            const currentStatus = await fetchStatus();
+            const response = await fetch('/api/status');
+            const currentStatus = await response.json();
 
             if (currentStatus.status === 'LIVRE') {
-                // Se estiver livre, ocupa normalmente
                 update(novaPessoa, novoCarro, 'ENTRADA');
             } else {
-                // Se estiver ocupada, abre o modal de aviso
-                const warningText = document.getElementById('warning-modal-text');
-                warningText.textContent = `Vaga ocupada por ${currentStatus.pessoa}. Deseja continuar?`;
-                
-                const forceButton = document.getElementById('force-occupy-btn');
-                // Armazena os dados necessários para a ação no próprio botão
-                forceButton.onclick = () => forceOccupy(novaPessoa, novoCarro, currentStatus.pessoa, currentStatus.carro);
-
-                openWarningModal();
+                if (confirm(`A vaga já está ocupada por ${currentStatus.pessoa}. Deseja forçar a entrada? Isso irá registrar a saída dele(a) e a sua entrada.`)) {
+                    // Primeiro, registra a saída do ocupante anterior, mas atribuindo a ação a quem está chegando
+                    await update(novaPessoa, currentStatus.carro, 'SAIDA');
+                    // Em seguida, registra a entrada do novo ocupante
+                    await update(novaPessoa, novoCarro, 'ENTRADA');
+                }
             }
         }
 
-        async function forceOccupy(novaPessoa, novoCarro, pessoaAntiga, carroAntigo) {
-            // Passo 1: Registra a SAÍDA do carro antigo, atribuindo a ação à nova pessoa.
-            await update(novaPessoa, carroAntigo, 'SAIDA');
-            
-            // Passo 2: Registra a ENTRADA do novo carro.
-            await update(novaPessoa, novoCarro, 'ENTRADA');
+        // --- LÓGICA DE CONEXÃO E ATUALIZAÇÃO EM TEMPO REAL ---
 
-            closeWarningModal();
-        }
+        // 1. Busca o status inicial ao carregar a página
+        fetch('/api/status').then(res => res.json()).then(data => {
+            updateStatusDisplay(data);
+        }).catch(err => console.error("Erro no fetch inicial:", err));
 
-        // --- Funções do Modal de Saída ---
-        function openSaidaModal() { saidaModal.style.display = 'flex'; }
-        function closeSaidaModal() { saidaModal.style.display = 'none'; }
-        function confirmarSaida(pessoa) {
-            update(pessoa, 'Qualquer', 'SAIDA');
-            closeSaidaModal();
-        }
-
-        // --- Funções do NOVO Modal de Aviso ---
-        function openWarningModal() { warningModal.style.display = 'flex'; }
-        function closeWarningModal() { warningModal.style.display = 'none'; }
-
-        // Carrega o status inicial ao abrir a página
-        fetchStatus();
+        // 2. Conecta ao stream de eventos do servidor para atualizações em tempo real
+        const eventSource = new EventSource("/api/stream");
+        eventSource.onmessage = function(event) {
+            console.log("Novo status recebido via SSE:", event.data);
+            const data = JSON.parse(event.data);
+            updateStatusDisplay(data);
+        };
+        eventSource.onerror = function(err) {
+            console.error("Erro na conexão EventSource:", err);
+        };
     </script>
-    <div style="margin-top: 20px; text-align: center;">
-    <button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: #333; color: white; border: none; border-radius: 8px;">
-        Ativar Notificações
-    </button>
-</div>
+    
+    <script>
+        // --- LÓGICA DE PWA E NOTIFICAÇÕES ---
+        const notificationsBtn = document.getElementById('notifications-btn');
 
-<script>
-    // ... todo o seu código JS existente (fetchStatus, tryToOccupy, etc) ...
-</script>
-
-<script>
-    const notificationsBtn = document.getElementById('notifications-btn');
-
-    // 1. REGISTRA O SERVICE WORKER
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/service-worker.js')
-            .then(registration => {
-                console.log('Service Worker registrado com sucesso:', registration);
-                notificationsBtn.disabled = false; // Habilita o botão após registro
-            })
-            .catch(error => {
-                console.error('Falha ao registrar Service Worker:', error);
-            });
-    } else {
-        notificationsBtn.style.display = 'none'; // Esconde se não for compatível
-    }
-
-    // Função para converter a chave VAPID
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/service-worker.js')
+                .then(() => console.log('Service Worker registrado com sucesso.'))
+                .catch(error => console.error('Falha ao registrar Service Worker:', error));
+        } else {
+            notificationsBtn.style.display = 'none';
         }
-        return outputArray;
-    }
 
-    // 2. LÓGICA DE INSCRIÇÃO PARA NOTIFICAÇÕES
-    async function subscribeUser() {
-        // Pede a chave pública do servidor
-        const response = await fetch('/api/vapid_public_key');
-        const data = await response.json();
-        const vapidPublicKey = data.public_key;
-        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+            return outputArray;
+        }
 
-        try {
-            const registration = await navigator.serviceWorker.ready;
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: convertedVapidKey
-            });
+        async function subscribeUser() {
+            try {
+                const response = await fetch('/api/vapid_public_key');
+                const data = await response.json();
+                const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
 
-            // Envia o objeto de inscrição para o backend
-            await fetch('/api/subscribe', {
-                method: 'POST',
-                body: JSON.stringify(subscription),
-                headers: {
-                    'Content-Type': 'application/json'
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: convertedVapidKey
+                });
+
+                await fetch('/api/subscribe', {
+                    method: 'POST',
+                    body: JSON.stringify(subscription),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                notificationsBtn.textContent = 'Notificações Ativadas!';
+                notificationsBtn.disabled = true;
+            } catch (error) {
+                console.error('Falha ao se inscrever para notificações:', error);
+                alert('Não foi possível ativar as notificações.');
+            }
+        }
+        
+        notificationsBtn.addEventListener('click', () => {
+            if (Notification.permission === 'denied') {
+                alert('As notificações foram bloqueadas. Você precisa habilitá-las nas configurações do seu navegador ou site.');
+                return;
+            }
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    subscribeUser();
                 }
             });
-
-            notificationsBtn.textContent = 'Notificações Ativadas!';
-            notificationsBtn.disabled = true;
-            
-        } catch (error) {
-            console.error('Falha ao se inscrever para notificações:', error);
-            alert('Não foi possível ativar as notificações.');
-        }
-    }
-    
-    notificationsBtn.addEventListener('click', () => {
-        Notification.requestPermission().then(permission => {
-            if (permission === 'granted') {
-                subscribeUser();
-            } else {
-                alert('Permissão para notificações foi negada.');
-            }
         });
-    });
-
-</script>
-</body>
+    </script>
 </body>
 </html>

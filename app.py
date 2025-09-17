@@ -1,10 +1,11 @@
 import os
 import json
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
 from pywebpush import webpush, WebPushException
+import time
 
 app = Flask(__name__)
 
@@ -18,39 +19,21 @@ if not all([DATABASE_URL, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
 
 engine = create_engine(DATABASE_URL)
 
+# Lista para manter as conexões SSE ativas
+subscriptions_sse = []
+
 # --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 def initialize_database():
     with engine.connect() as conn:
-        # Tabela para o status atual (apenas 1 linha)
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS status (
-                id INT PRIMARY KEY,
-                status VARCHAR(20),
-                carro VARCHAR(50),
-                pessoa VARCHAR(50),
-                timestamp VARCHAR(50)
-            );
+            CREATE TABLE IF NOT EXISTS status (id INT PRIMARY KEY, status VARCHAR(20), carro VARCHAR(50), pessoa VARCHAR(50), timestamp VARCHAR(50));
         """))
-        # Tabela para o log
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS log (
-                id SERIAL PRIMARY KEY,
-                timestamp VARCHAR(50),
-                pessoa VARCHAR(50),
-                carro VARCHAR(50),
-                acao VARCHAR(20)
-            );
+            CREATE TABLE IF NOT EXISTS log (id SERIAL PRIMARY KEY, timestamp VARCHAR(50), pessoa VARCHAR(50), carro VARCHAR(50), acao VARCHAR(20));
         """))
-        
-        # Tabela para armazenar as inscrições de notificação
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS subscriptions (
-                id SERIAL PRIMARY KEY,
-                subscription_json TEXT NOT NULL UNIQUE
-            );
+            CREATE TABLE IF NOT EXISTS subscriptions (id SERIAL PRIMARY KEY, subscription_json TEXT NOT NULL UNIQUE);
         """))
-
-        # Insere a linha inicial de status se não existir
         result = conn.execute(text("SELECT COUNT(*) FROM status WHERE id = 1;")).scalar()
         if result == 0:
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
@@ -59,8 +42,7 @@ def initialize_database():
 # --- FUNÇÃO HELPER PARA ENVIAR NOTIFICAÇÕES ---
 def send_notification_to_all(payload_title, payload_body):
     with engine.connect() as conn:
-        result = conn.execute(text("SELECT subscription_json FROM subscriptions;"))
-        subscriptions = result.fetchall()
+        subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
 
     for sub_row in subscriptions:
         try:
@@ -89,13 +71,9 @@ def get_status():
         with engine.connect() as conn:
             result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
             if result:
-                status_data = {
-                    "status": result.status, "carro": result.carro, "pessoa": result.pessoa, "timestamp": result.timestamp
-                }
+                status_data = {"status": result.status, "carro": result.carro, "pessoa": result.pessoa, "timestamp": result.timestamp}
             else:
-                status_data = {
-                    "status": "LIVRE", "carro": "Nenhum", "pessoa": "Sistema", "timestamp": "Iniciado agora"
-                }
+                status_data = {"status": "LIVRE", "carro": "Nenhum", "pessoa": "Sistema", "timestamp": "Iniciado agora"}
         return jsonify(status_data)
     except Exception as e:
         print(f"ERRO em /api/status: {e}")
@@ -109,33 +87,30 @@ def update_status():
     acao = data.get('acao')
     
     fuso_horario_local = ZoneInfo("America/Sao_Paulo")
-    agora_local = datetime.now(fuso_horario_local)
-    now_str = agora_local.strftime('%d/%m/%Y %H:%M:%S')
+    now_str = datetime.now(fuso_horario_local).strftime('%d/%m/%Y %H:%M:%S')
 
-    notification_title = ""
-    notification_body = ""
+    notification_title, notification_body = "", ""
 
     with engine.connect() as conn:
-        conn.execute(text(
-            "INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"),
-            {"ts": now_str, "p": pessoa, "c": carro, "a": acao}
-        )
+        conn.execute(text("INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"), {"ts": now_str, "p": pessoa, "c": carro, "a": acao})
         if acao == 'ENTRADA':
-            conn.execute(text(
-                "UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"),
-                {"c": carro, "p": pessoa, "ts": now_str}
-            )
-            notification_title = "Vaga Ocupada"
-            notification_body = f"{pessoa} acabou de chegar com o {carro}."
+            conn.execute(text("UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"), {"c": carro, "p": pessoa, "ts": now_str})
+            notification_title, notification_body = "Vaga Ocupada", f"{pessoa} acabou de chegar com o {carro}."
         else:
-            conn.execute(text(
-                "UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"),
-                {"p": pessoa, "ts": now_str}
-            )
-            notification_title = "Vaga Livre!"
-            notification_body = f"{pessoa} acabou de sair da garagem."
+            conn.execute(text("UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"), {"p": pessoa, "ts": now_str})
+            notification_title, notification_body = "Vaga Livre!", f"{pessoa} acabou de sair da garagem."
         conn.commit()
     
+    # Notifica via SSE para atualização em tempo real da interface
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
+        if result:
+            status_data = {"status": result.status, "carro": result.carro, "pessoa": result.pessoa, "timestamp": result.timestamp}
+            status_json = json.dumps(status_data)
+            for q in subscriptions_sse:
+                q.append(status_json)
+    
+    # Envia a notificação PUSH
     if notification_title:
         send_notification_to_all(notification_title, notification_body)
     
@@ -147,14 +122,27 @@ def get_vapid_public_key():
 
 @app.route('/api/subscribe', methods=['POST'])
 def subscribe():
-    subscription_data = request.json
-    subscription_json = json.dumps(subscription_data)
+    subscription_json = json.dumps(request.json)
     with engine.connect() as conn:
         conn.execute(text("INSERT INTO subscriptions (subscription_json) VALUES (:sub) ON CONFLICT (subscription_json) DO NOTHING;"), {"sub": subscription_json})
         conn.commit()
     return jsonify({'message': 'Inscrição recebida.'})
 
-# --- INICIALIZAÇÃO ---
+@app.route('/api/stream')
+def stream():
+    def event_stream():
+        q = []
+        subscriptions_sse.append(q)
+        try:
+            while True:
+                if q:
+                    yield f"data: {q.pop(0)}\n\n"
+                yield ": keep-alive\n\n"
+                time.sleep(15)
+        finally:
+            subscriptions_sse.remove(q)
+    return Response(event_stream(), mimetype='text/event-stream')
+
 with app.app_context():
     initialize_database()
 
