@@ -21,17 +21,31 @@ if not all([DATABASE_URL, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
 engine = create_engine(DATABASE_URL)
 
 # --- INICIALIZAÇÃO DO BANCO DE DADOS ---
+# app.py - Substitua esta função inteira
+
+# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 def initialize_database():
     with engine.connect() as conn:
-        # Tabela de status (existente)
+        # Tabela para o status atual (apenas 1 linha)
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS status (...); 
-        """)) # Mantive abreviado para clareza
-        
-        # Tabela de log (existente)
+            CREATE TABLE IF NOT EXISTS status (
+                id INT PRIMARY KEY,
+                status VARCHAR(20),
+                carro VARCHAR(50),
+                pessoa VARCHAR(50),
+                timestamp VARCHAR(50)
+            );
+        """))
+        # Tabela para o log
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS log (...);
-        """)) # Mantive abreviado para clareza
+            CREATE TABLE IF NOT EXISTS log (
+                id SERIAL PRIMARY KEY,
+                timestamp VARCHAR(50),
+                pessoa VARCHAR(50),
+                carro VARCHAR(50),
+                acao VARCHAR(20)
+            );
+        """))
         
         # NOVA Tabela para armazenar as inscrições de notificação
         conn.execute(text("""
@@ -41,6 +55,7 @@ def initialize_database():
             );
         """))
 
+        # Insere a linha inicial de status se não existir
         result = conn.execute(text("SELECT COUNT(*) FROM status WHERE id = 1;")).scalar()
         if result == 0:
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
