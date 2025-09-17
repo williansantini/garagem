@@ -61,6 +61,8 @@
             color: black;
         }
     </style>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#007bff"/>
 </head>
 <body>
 
@@ -185,5 +187,89 @@
         // Carrega o status inicial ao abrir a página
         fetchStatus();
     </script>
+    <div style="margin-top: 20px; text-align: center;">
+    <button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: #333; color: white; border: none; border-radius: 8px;">
+        Ativar Notificações
+    </button>
+</div>
+
+<script>
+    // ... todo o seu código JS existente (fetchStatus, tryToOccupy, etc) ...
+</script>
+
+<script>
+    const notificationsBtn = document.getElementById('notifications-btn');
+
+    // 1. REGISTRA O SERVICE WORKER
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/service-worker.js')
+            .then(registration => {
+                console.log('Service Worker registrado com sucesso:', registration);
+                notificationsBtn.disabled = false; // Habilita o botão após registro
+            })
+            .catch(error => {
+                console.error('Falha ao registrar Service Worker:', error);
+            });
+    } else {
+        notificationsBtn.style.display = 'none'; // Esconde se não for compatível
+    }
+
+    // Função para converter a chave VAPID
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
+    // 2. LÓGICA DE INSCRIÇÃO PARA NOTIFICAÇÕES
+    async function subscribeUser() {
+        // Pede a chave pública do servidor
+        const response = await fetch('/api/vapid_public_key');
+        const data = await response.json();
+        const vapidPublicKey = data.public_key;
+        const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: convertedVapidKey
+            });
+
+            // Envia o objeto de inscrição para o backend
+            await fetch('/api/subscribe', {
+                method: 'POST',
+                body: JSON.stringify(subscription),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            notificationsBtn.textContent = 'Notificações Ativadas!';
+            notificationsBtn.disabled = true;
+            
+        } catch (error) {
+            console.error('Falha ao se inscrever para notificações:', error);
+            alert('Não foi possível ativar as notificações.');
+        }
+    }
+    
+    notificationsBtn.addEventListener('click', () => {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                subscribeUser();
+            } else {
+                alert('Permissão para notificações foi negada.');
+            }
+        });
+    });
+
+</script>
+</body>
 </body>
 </html>
