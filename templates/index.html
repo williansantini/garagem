@@ -144,13 +144,10 @@
             } else {
                 notificationsBtn.style.display = 'none';
             }
-            // (O restante do código de PWA e Pull-to-Refresh continua o mesmo)
-            // ...
         });
     </script>
     <script>
-      // script separado para o pull to refresh e PWA por clareza, mas poderia estar junto
-      // (código completo do pull-to-refresh e do PWA da resposta anterior vai aqui)
+      // script separado para o pull to refresh e PWA por clareza
        const ptrIndicator = document.getElementById('ptr-indicator');
         const ptrIcon = ptrIndicator.querySelector('span');
         const body = document.querySelector('body');
@@ -213,7 +210,8 @@
                 notificationsBtn.disabled = true;
             } catch (error) {
                 console.error('Falha ao se inscrever:', error);
-                alert('Não foi possível ativar as notificações.');
+                // --- MUDANÇA IMPORTANTE AQUI ---
+                alert('ERRO AO INSCREVER: ' + error.message); 
             }
         }
         notificationsBtn.addEventListener('click', () => {
@@ -221,6 +219,5 @@
             Notification.requestPermission().then(permission => { if (permission === 'granted') { subscribeUser(); } });
         });
     </script>
-
 </body>
 </html>
