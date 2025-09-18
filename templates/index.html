@@ -200,23 +200,40 @@
         }
         async function subscribeUser() {
             try {
+                alert('PASSO 4: Entrou na função subscribeUser.');
                 const response = await fetch('/api/vapid_public_key');
                 const data = await response.json();
                 const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
                 const registration = await navigator.serviceWorker.ready;
+                alert('PASSO 5: Service worker pronto. Pedindo inscrição...');
                 const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: convertedVapidKey });
+                alert('PASSO 6: Inscrição bem-sucedida! Enviando para o servidor...');
                 await fetch('/api/subscribe', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } });
                 notificationsBtn.textContent = 'Notificações Ativadas!';
                 notificationsBtn.disabled = true;
             } catch (error) {
                 console.error('Falha ao se inscrever:', error);
-                // --- MUDANÇA IMPORTANTE AQUI ---
                 alert('ERRO AO INSCREVER: ' + error.message); 
             }
         }
         notificationsBtn.addEventListener('click', () => {
-            if (Notification.permission === 'denied') { alert('As notificações foram bloqueadas nas configurações do navegador.'); return; }
-            Notification.requestPermission().then(permission => { if (permission === 'granted') { subscribeUser(); } });
+            alert('PASSO 1: Botão de notificações clicado!');
+            const permissionStatus = Notification.permission;
+            alert('PASSO 2: Status atual da permissão é: ' + permissionStatus);
+
+            if (permissionStatus === 'denied') { 
+                alert('As notificações foram bloqueadas nas configurações do navegador.'); 
+                return; 
+            }
+
+            alert('PASSO 3: Pedindo permissão ao navegador...');
+            Notification.requestPermission().then(permission => { 
+                if (permission === 'granted') { 
+                    subscribeUser(); 
+                } else {
+                    alert('Permissão não concedida. Status: ' + permission);
+                }
+            });
         });
     </script>
 </body>
