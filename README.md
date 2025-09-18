@@ -1,48 +1,35 @@
 # Sistema de Controle de Vaga de Garagem
 
-Um sistema web simples para monitorar e registrar o status de uma vaga de garagem compartilhada. A aplicação permite que os usuários atualizem o status da vaga (livre/ocupada) através de uma interface web acessível por celular.
+Um sistema web PWA (Progressive Web App) para monitorar e registrar o status de uma vaga de garagem compartilhada. A aplicação permite que os usuários atualizem o status da vaga (livre/ocupada) e recebam notificações push em tempo real.
 
 ## Tecnologias Utilizadas
-- **Backend:** Python 3 com Flask
+- **Backend:** Python 3 com Flask e SQLAlchemy
 - **Frontend:** HTML5, CSS3, JavaScript
-- **Armazenamento de Dados:** Arquivos JSON para o status atual e CSV para o log de histórico.
+- **Servidor WSGI:** Gunicorn com workers `gevent` para suportar Server-Sent Events (SSE).
+- **Banco de Dados:** PostgreSQL (recomendado para deploy)
+- **Notificações:** Web Push Protocol (VAPID)
 
 ## Estrutura do Projeto
 /
-├── app.py             # Servidor web e lógica da API
+├── app.py             # Servidor web, lógica da API e notificações
+├── gunicorn_config.py # Configuração do Gunicorn para deploy
 ├── requirements.txt   # Dependências do Python
-├── status.json        # Arquivo com o status atual da garagem
-├── log.csv            # Histórico de entradas e saídas
+├── .gitignore         # Arquivos a serem ignorados pelo Git
 └── /templates
-└── index.html     # Página da interface do usuário
+    └── index.html     # Interface do usuário (frontend)
+└── /static
+    ├── style.css
+    ├── service-worker.js # Lógica do PWA e notificações
+    ├── manifest.json
+    └── *.png          # Ícones da aplicação
 
-## Como Executar
-1.  **Clone o repositório:**
-    ```bash
-    git clone <URL_DO_SEU_REPOSITORIO>
-    cd <NOME_DA_PASTA>
-    ```
+## Configuração e Execução
 
-2.  **Crie e ative um ambiente virtual (recomendado):**
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+### 1. Pré-requisitos
+- Python 3.8+
+- Git
 
-3.  **Instale as dependências:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Execute a aplicação:**
-    ```bash
-    python3 app.py
-    ```
-5.  Acesse a interface no seu navegador através do endereço `http://<IP_DO_SERVIDOR>:5000`.
-
-## Como Usar
-A interface web exibe o status atual da garagem. Os botões permitem que cada usuário registre a entrada com um carro específico ou a liberação da vaga. Todas as ações são registradas com data e hora no arquivo `log.csv`.
-
-## Endpoints da API
-- `GET /api/status`: Retorna um JSON com o estado atual da garagem.
-- `POST /api/update`: Recebe um JSON para atualizar o status. Exemplo de corpo: `{"pessoa": "Nome", "carro": "Carro", "acao": "ENTRADA"}`.
+### 2. Clone o Repositório
+```bash
+git clone <URL_DO_SEU_REPOSITORIO>
+cd <NOME_DA_PASTA>

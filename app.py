@@ -51,7 +51,7 @@ def send_notification_to_all(payload_title, payload_body):
                 subscription_info=subscription_data,
                 data=json.dumps({"title": payload_title, "body": payload_body}),
                 vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": "mailto:seu-email@exemplo.com"} # Mude para seu e-mail
+                vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"} # <-- MUDE AQUI PARA O SEU E-MAIL
             )
         except WebPushException as ex:
             print(f"Erro ao enviar notificação: {ex}")
