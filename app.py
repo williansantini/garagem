@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
 from pywebpush import webpush, WebPushException
 import time
+from threading import Thread
 
 app = Flask(__name__)
 
@@ -39,46 +40,46 @@ def initialize_database():
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
         conn.commit()
 
-# --- FUNÇÃO HELPER PARA ENVIAR NOTIFICAÇÕES (COM LOG DETALHADO) ---
+# --- FUNÇÃO HELPER PARA ENVIAR NOTIFICAÇÕES (AGORA EM THREAD) ---
+def send_notification_task(payload_title, payload_body):
+    """Função que executa em uma thread separada para não bloquear o gevent."""
+    with app.app_context():
+        print("--- [NOTIFICAÇÃO THREAD] Iniciando processo de envio ---")
+        with engine.connect() as conn:
+            subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
+
+        print(f"--- [NOTIFICAÇÃO THREAD] Encontradas {len(subscriptions)} inscrições no banco de dados.")
+
+        if not subscriptions:
+            print("--- [NOTIFICAÇÃO THREAD] Nenhuma inscrição encontrada. Abortando envio.")
+            return
+
+        for sub_row in subscriptions:
+            try:
+                subscription_data = json.loads(sub_row.subscription_json)
+                webpush(
+                    subscription_info=subscription_data,
+                    data=json.dumps({"title": payload_title, "body": payload_body}),
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"}
+                )
+                print(f"--- [NOTIFICAÇÃO THREAD] Envio para {subscription_data.get('endpoint')} bem-sucedido.")
+            except WebPushException as ex:
+                print(f"--- [NOTIFICAÇÃO THREAD] ERRO WebPushException: {ex}")
+                if ex.response and ex.response.status_code in [404, 410]:
+                    print("--- [NOTIFICAÇÃO THREAD] Removendo inscrição expirada.")
+                    with engine.connect() as conn_del:
+                        conn_del.execute(text("DELETE FROM subscriptions WHERE subscription_json = :sub_json;"), {"sub_json": sub_row[0]})
+                        conn_del.commit()
+            except Exception as e:
+                print(f"--- [NOTIFICAÇÃO THREAD] ERRO INESPERADO: {e}")
+        
+        print("--- [NOTIFICAÇÃO THREAD] Processo de envio finalizado ---")
+
 def send_notification_to_all(payload_title, payload_body):
-    print("--- [NOTIFICAÇÃO] Iniciando processo de envio ---")
-    with engine.connect() as conn:
-        subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
-
-    print(f"--- [NOTIFICAÇÃO] Encontradas {len(subscriptions)} inscrições no banco de dados.")
-
-    if not subscriptions:
-        print("--- [NOTIFICAÇÃO] Nenhuma inscrição encontrada. Abortando envio.")
-        return
-
-    for sub_row in subscriptions:
-        try:
-            subscription_data = json.loads(sub_row.subscription_json)
-            print(f"--- [NOTIFICAÇÃO] Tentando enviar para a inscrição com endpoint: {subscription_data.get('endpoint', 'N/A')}")
-            
-            webpush(
-                subscription_info=subscription_data,
-                data=json.dumps({"title": payload_title, "body": payload_body}),
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"} # MANTENHA SEU E-MAIL AQUI
-            )
-
-            print("--- [NOTIFICAÇÃO] Envio realizado com sucesso para um dispositivo.")
-
-        except WebPushException as ex:
-            print(f"--- [NOTIFICAÇÃO] ERRO WebPushException: {ex}")
-            if ex.response:
-                print(f"--- [NOTIFICAÇÃO] Resposta do servidor de push: {ex.response.status_code}, {ex.response.text}")
-
-            if ex.response and ex.response.status_code in [404, 410]:
-                print(f"--- [NOTIFICAÇÃO] Removendo inscrição expirada do banco de dados.")
-                with engine.connect() as conn:
-                    conn.execute(text("DELETE FROM subscriptions WHERE subscription_json = :sub_json;"), {"sub_json": sub_row.subscription_json})
-                    conn.commit()
-        except Exception as e:
-            print(f"--- [NOTIFICAÇÃO] ERRO INESPERADO: {e}")
-    
-    print("--- [NOTIFICAÇÃO] Processo de envio finalizado ---")
+    """Inicia a tarefa de envio de notificações em segundo plano."""
+    thread = Thread(target=send_notification_task, args=(payload_title, payload_body))
+    thread.start()
 
 # --- ROTAS DA APLICAÇÃO ---
 @app.route('/')
@@ -115,13 +116,17 @@ def update_status():
     notification_title, notification_body = "", ""
 
     with engine.connect() as conn:
-        conn.execute(text("INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"), {"ts": now_str, "p": pessoa, "c": carro, "a": acao})
-        if acao == 'ENTRADA':
-            conn.execute(text("UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"), {"c": carro, "p": pessoa, "ts": now_str})
-            notification_title, notification_body = "Vaga Ocupada", f"{pessoa} acabou de chegar com o {carro}."
-        else:
+        # Ação de SAÍDA sempre define o status como LIVRE
+        if acao == 'SAIDA':
             conn.execute(text("UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"), {"p": pessoa, "ts": now_str})
             notification_title, notification_body = "Vaga Livre!", f"{pessoa} acabou de sair da garagem."
+        # Ação de ENTRADA sempre define o status como OCUPADA
+        elif acao == 'ENTRADA':
+            conn.execute(text("UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"), {"c": carro, "p": pessoa, "ts": now_str})
+            notification_title, notification_body = "Vaga Ocupada", f"{pessoa} acabou de chegar com o {carro}."
+
+        # Registrar a ação no log, independentemente do tipo
+        conn.execute(text("INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"), {"ts": now_str, "p": pessoa, "c": carro, "a": acao})
         conn.commit()
     
     with engine.connect() as conn:
@@ -158,10 +163,12 @@ def stream():
             while True:
                 if q:
                     yield f"data: {q.pop(0)}\n\n"
-                yield ": keep-alive\n\n"
+                else:
+                    yield ": keep-alive\n\n"
                 time.sleep(15)
         finally:
-            subscriptions_sse.remove(q)
+            if q in subscriptions_sse:
+                subscriptions_sse.remove(q)
     return Response(event_stream(), mimetype='text/event-stream')
 
 with app.app_context():

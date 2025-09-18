@@ -92,11 +92,20 @@
                 }
             }
             
+            // --- FUNÇÃO CORRIGIDA ---
             function forceOccupy(novaPessoa, novoCarro) {
-                updateStatusDisplay({ status: 'OCUPADA', pessoa: novaPessoa, carro: novoCarro, timestamp: 'agora...' });
-                sendUpdateToServer(novaPessoa, currentStatus.carro, 'SAIDA');
-                sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
+                // 1. Envia o evento de SAÍDA para a pessoa que está atualmente na vaga.
+                sendUpdateToServer(currentStatus.pessoa, currentStatus.carro, 'SAIDA');
+                
+                // 2. Aguarda um curto período para garantir que o servidor processe a saída primeiro.
+                setTimeout(() => {
+                    // 3. Envia o evento de ENTRADA para a nova pessoa.
+                    sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
+                }, 250); // 250ms de delay
+
+                // 4. Fecha o modal e atualiza a interface otimisticamente para a nova pessoa.
                 closeWarningModal();
+                updateStatusDisplay({ status: 'OCUPADA', pessoa: novaPessoa, carro: novoCarro, timestamp: 'agora...' });
             }
             
             window.openSaidaModal = function() { saidaModal.style.display = 'flex'; }
@@ -133,7 +142,6 @@
             });
 
             if ('serviceWorker' in navigator) {
-                // --- MUDANÇA IMPORTANTE AQUI ---
                 navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('Erro SW:', err));
             } else {
                 document.getElementById('notifications-btn').style.display = 'none';
