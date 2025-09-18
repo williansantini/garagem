@@ -1,6 +1,6 @@
 import os
 import json
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
@@ -51,7 +51,7 @@ def send_notification_to_all(payload_title, payload_body):
                 subscription_info=subscription_data,
                 data=json.dumps({"title": payload_title, "body": payload_body}),
                 vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"} # <-- MUDE AQUI PARA O SEU E-MAIL
+                vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"} # LEMBRE-SE DE MANTER SEU E-MAIL AQUI
             )
         except WebPushException as ex:
             print(f"Erro ao enviar notificação: {ex}")
@@ -64,6 +64,11 @@ def send_notification_to_all(payload_title, payload_body):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# --- NOVA ROTA PARA O SERVICE WORKER ---
+@app.route('/service-worker.js')
+def service_worker():
+    return send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
 
 @app.route('/api/status')
 def get_status():
@@ -101,7 +106,6 @@ def update_status():
             notification_title, notification_body = "Vaga Livre!", f"{pessoa} acabou de sair da garagem."
         conn.commit()
     
-    # Notifica via SSE para atualização em tempo real da interface
     with engine.connect() as conn:
         result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
         if result:
@@ -110,7 +114,6 @@ def update_status():
             for q in subscriptions_sse:
                 q.append(status_json)
     
-    # Envia a notificação PUSH
     if notification_title:
         send_notification_to_all(notification_title, notification_body)
     

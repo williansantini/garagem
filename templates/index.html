@@ -133,7 +133,8 @@
             });
 
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/static/service-worker.js').catch(err => console.error('Erro SW:', err));
+                // --- MUDANÇA IMPORTANTE AQUI ---
+                navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('Erro SW:', err));
             } else {
                 document.getElementById('notifications-btn').style.display = 'none';
             }
