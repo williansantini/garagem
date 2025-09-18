@@ -39,33 +39,53 @@ def initialize_database():
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
         conn.commit()
 
-# --- FUNÇÃO HELPER PARA ENVIAR NOTIFICAÇÕES ---
+# --- FUNÇÃO HELPER PARA ENVIAR NOTIFICAÇÕES (COM LOG DETALHADO) ---
 def send_notification_to_all(payload_title, payload_body):
+    print("--- [NOTIFICAÇÃO] Iniciando processo de envio ---")
     with engine.connect() as conn:
         subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
+
+    print(f"--- [NOTIFICAÇÃO] Encontradas {len(subscriptions)} inscrições no banco de dados.")
+
+    if not subscriptions:
+        print("--- [NOTIFICAÇÃO] Nenhuma inscrição encontrada. Abortando envio.")
+        return
 
     for sub_row in subscriptions:
         try:
             subscription_data = json.loads(sub_row.subscription_json)
+            print(f"--- [NOTIFICAÇÃO] Tentando enviar para a inscrição com endpoint: {subscription_data.get('endpoint', 'N/A')}")
+            
             webpush(
                 subscription_info=subscription_data,
                 data=json.dumps({"title": payload_title, "body": payload_body}),
                 vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"} # LEMBRE-SE DE MANTER SEU E-MAIL AQUI
+                vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"} # MANTENHA SEU E-MAIL AQUI
             )
+
+            print("--- [NOTIFICAÇÃO] Envio realizado com sucesso para um dispositivo.")
+
         except WebPushException as ex:
-            print(f"Erro ao enviar notificação: {ex}")
+            print(f"--- [NOTIFICAÇÃO] ERRO WebPushException: {ex}")
+            if ex.response:
+                print(f"--- [NOTIFICAÇÃO] Resposta do servidor de push: {ex.response.status_code}, {ex.response.text}")
+
+            # Se a inscrição for inválida (Gone ou Not Found), remove do banco
             if ex.response and ex.response.status_code in [404, 410]:
+                print(f"--- [NOTIFICAÇÃO] Removendo inscrição expirada do banco de dados.")
                 with engine.connect() as conn:
                     conn.execute(text("DELETE FROM subscriptions WHERE subscription_json = :sub_json;"), {"sub_json": sub_row.subscription_json})
                     conn.commit()
+        except Exception as e:
+            print(f"--- [NOTIFICAÇÃO] ERRO INESPERADO: {e}")
+    
+    print("--- [NOTIFICAÇÃO] Processo de envio finalizado ---")
 
 # --- ROTAS DA APLICAÇÃO ---
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# --- NOVA ROTA PARA O SERVICE WORKER ---
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
@@ -81,7 +101,6 @@ def get_status():
                 status_data = {"status": "LIVRE", "carro": "Nenhum", "pessoa": "Sistema", "timestamp": "Iniciado agora"}
         return jsonify(status_data)
     except Exception as e:
-        print(f"ERRO em /api/status: {e}")
         return jsonify({"error": "Não foi possível buscar o status no banco de dados."}), 500
 
 @app.route('/api/update', methods=['POST'])
