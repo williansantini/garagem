@@ -19,67 +19,39 @@ if not all([DATABASE_URL, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
     raise RuntimeError("As variáveis de ambiente DATABASE_URL, VAPID_PRIVATE_KEY e VAPID_PUBLIC_KEY devem estar configuradas.")
 
 engine = create_engine(DATABASE_URL)
-
-# Lista para manter as conexões SSE ativas
 subscriptions_sse = []
 
 # --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 def initialize_database():
     with engine.connect() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS status (id INT PRIMARY KEY, status VARCHAR(20), carro VARCHAR(50), pessoa VARCHAR(50), timestamp VARCHAR(50));
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS log (id SERIAL PRIMARY KEY, timestamp VARCHAR(50), pessoa VARCHAR(50), carro VARCHAR(50), acao VARCHAR(20));
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS subscriptions (id SERIAL PRIMARY KEY, subscription_json TEXT NOT NULL UNIQUE);
-        """))
-        result = conn.execute(text("SELECT COUNT(*) FROM status WHERE id = 1;")).scalar()
-        if result == 0:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS status (id INT PRIMARY KEY, status VARCHAR(20), carro VARCHAR(50), pessoa VARCHAR(50), timestamp VARCHAR(50));"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS log (id SERIAL PRIMARY KEY, timestamp VARCHAR(50), pessoa VARCHAR(50), carro VARCHAR(50), acao VARCHAR(20));"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS subscriptions (id SERIAL PRIMARY KEY, subscription_json TEXT NOT NULL UNIQUE);"))
+        if conn.execute(text("SELECT COUNT(*) FROM status WHERE id = 1;")).scalar() == 0:
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
         conn.commit()
 
-# --- FUNÇÃO HELPER PARA ENVIAR NOTIFICAÇÕES (AGORA EM THREAD) ---
+# --- LÓGICA DE NOTIFICAÇÃO EM THREAD ---
 def send_notification_task(payload_title, payload_body):
-    """Função que executa em uma thread separada para não bloquear o gevent."""
     with app.app_context():
-        print("--- [NOTIFICAÇÃO THREAD] Iniciando processo de envio ---")
         with engine.connect() as conn:
             subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
-
-        print(f"--- [NOTIFICAÇÃO THREAD] Encontradas {len(subscriptions)} inscrições no banco de dados.")
-
-        if not subscriptions:
-            print("--- [NOTIFICAÇÃO THREAD] Nenhuma inscrição encontrada. Abortando envio.")
-            return
-
         for sub_row in subscriptions:
             try:
-                subscription_data = json.loads(sub_row.subscription_json)
                 webpush(
-                    subscription_info=subscription_data,
+                    subscription_info=json.loads(sub_row[0]),
                     data=json.dumps({"title": payload_title, "body": payload_body}),
                     vapid_private_key=VAPID_PRIVATE_KEY,
                     vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"}
                 )
-                print(f"--- [NOTIFICAÇÃO THREAD] Envio para {subscription_data.get('endpoint')} bem-sucedido.")
             except WebPushException as ex:
-                print(f"--- [NOTIFICAÇÃO THREAD] ERRO WebPushException: {ex}")
                 if ex.response and ex.response.status_code in [404, 410]:
-                    print("--- [NOTIFICAÇÃO THREAD] Removendo inscrição expirada.")
                     with engine.connect() as conn_del:
                         conn_del.execute(text("DELETE FROM subscriptions WHERE subscription_json = :sub_json;"), {"sub_json": sub_row[0]})
                         conn_del.commit()
-            except Exception as e:
-                print(f"--- [NOTIFICAÇÃO THREAD] ERRO INESPERADO: {e}")
-        
-        print("--- [NOTIFICAÇÃO THREAD] Processo de envio finalizado ---")
 
 def send_notification_to_all(payload_title, payload_body):
-    """Inicia a tarefa de envio de notificações em segundo plano."""
-    thread = Thread(target=send_notification_task, args=(payload_title, payload_body))
-    thread.start()
+    Thread(target=send_notification_task, args=(payload_title, payload_body)).start()
 
 # --- ROTAS DA APLICAÇÃO ---
 @app.route('/')
@@ -92,53 +64,35 @@ def service_worker():
 
 @app.route('/api/status')
 def get_status():
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
-            if result:
-                status_data = {"status": result.status, "carro": result.carro, "pessoa": result.pessoa, "timestamp": result.timestamp}
-            else:
-                status_data = {"status": "LIVRE", "carro": "Nenhum", "pessoa": "Sistema", "timestamp": "Iniciado agora"}
-        return jsonify(status_data)
-    except Exception as e:
-        return jsonify({"error": "Não foi possível buscar o status no banco de dados."}), 500
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
+        return jsonify(dict(result._mapping) if result else {"status": "LIVRE", "carro": "Nenhum", "pessoa": "Sistema", "timestamp": ""})
 
 @app.route('/api/update', methods=['POST'])
 def update_status():
     data = request.json
-    pessoa = data.get('pessoa')
-    carro = data.get('carro')
-    acao = data.get('acao')
-    
-    fuso_horario_local = ZoneInfo("America/Sao_Paulo")
-    now_str = datetime.now(fuso_horario_local).strftime('%d/%m/%Y %H:%M:%S')
-
+    pessoa, carro, acao = data.get('pessoa'), data.get('carro'), data.get('acao')
+    now_str = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%d/%m/%Y %H:%M:%S')
     notification_title, notification_body = "", ""
 
     with engine.connect() as conn:
-        # Ação de SAÍDA sempre define o status como LIVRE
         if acao == 'SAIDA':
             conn.execute(text("UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"), {"p": pessoa, "ts": now_str})
             notification_title, notification_body = "Vaga Livre!", f"{pessoa} acabou de sair da garagem."
-        # Ação de ENTRADA sempre define o status como OCUPADA
         elif acao == 'ENTRADA':
             conn.execute(text("UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"), {"c": carro, "p": pessoa, "ts": now_str})
             notification_title, notification_body = "Vaga Ocupada", f"{pessoa} acabou de chegar com o {carro}."
-
-        # Registrar a ação no log, independentemente do tipo
         conn.execute(text("INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"), {"ts": now_str, "p": pessoa, "c": carro, "a": acao})
         conn.commit()
+
+    if notification_title:
+        send_notification_to_all(notification_title, notification_body)
     
     with engine.connect() as conn:
         result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
-        if result:
-            status_data = {"status": result.status, "carro": result.carro, "pessoa": result.pessoa, "timestamp": result.timestamp}
-            status_json = json.dumps(status_data)
-            for q in subscriptions_sse:
-                q.append(status_json)
-    
-    if notification_title:
-        send_notification_to_all(notification_title, notification_body)
+        status_json = json.dumps(dict(result._mapping))
+        for q in subscriptions_sse:
+            q.append(status_json)
     
     return jsonify({'message': 'Status atualizado com sucesso!'})
 
@@ -148,9 +102,8 @@ def get_vapid_public_key():
 
 @app.route('/api/subscribe', methods=['POST'])
 def subscribe():
-    subscription_json = json.dumps(request.json)
     with engine.connect() as conn:
-        conn.execute(text("INSERT INTO subscriptions (subscription_json) VALUES (:sub) ON CONFLICT (subscription_json) DO NOTHING;"), {"sub": subscription_json})
+        conn.execute(text("INSERT INTO subscriptions (subscription_json) VALUES (:sub) ON CONFLICT (subscription_json) DO NOTHING;"), {"sub": json.dumps(request.json)})
         conn.commit()
     return jsonify({'message': 'Inscrição recebida.'})
 
@@ -161,10 +114,7 @@ def stream():
         subscriptions_sse.append(q)
         try:
             while True:
-                if q:
-                    yield f"data: {q.pop(0)}\n\n"
-                else:
-                    yield ": keep-alive\n\n"
+                yield f"data: {q.pop(0)}\n\n" if q else ": keep-alive\n\n"
                 time.sleep(15)
         finally:
             if q in subscriptions_sse:

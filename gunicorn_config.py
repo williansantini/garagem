@@ -1,7 +1,6 @@
-# Configuração do Gunicorn para usar workers assíncronos (gevent)
-# Isso é essencial para aplicações com Server-Sent Events (SSE) ou WebSockets
-
-worker_class = 'gevent'
-workers = 1 # Render geralmente lida com concorrência externamente
-threads = 10 # Número de threads por worker
-timeout = 120 # Aumenta o timeout para conexões de longa duração como SSE
+# Configuração do Gunicorn para usar workers assíncronos (meinheld)
+# Essencial para aplicações com Server-Sent Events (SSE) e alta performance.
+worker_class = 'meinheld.gmeinheld.MeinheldWorker'
+workers = 1 
+threads = 10
+timeout = 120
