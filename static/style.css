@@ -3,7 +3,6 @@
     --background-color: #121212;
     --surface-color: #1c1c1e;
     --primary-text-color: #ffffff;
-    /* --- COR ALTERADA: Usando branco com 70% de opacidade para melhor legibilidade --- */
     --secondary-text-color: rgba(255, 255, 255, 0.7);
     --status-livre: #30d158;
     --status-ocupada: #ff453a;
@@ -13,101 +12,55 @@
     --accent-grey: #8e8e93;
     --accent-orange: #ff9f0a;
 }
-
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background-color: var(--background-color);
-    color: var(--primary-text-color);
-    padding: 10px;
-    margin: 0;
+    display: flex; flex-direction: column; align-items: center;
+    background-color: var(--background-color); color: var(--primary-text-color);
+    padding: 10px; margin: 0;
 }
-
 #status-box {
-    margin-top: 20px;
-    padding: 30px;
-    border-radius: 12px;
-    text-align: center;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    margin-top: 20px; padding: 30px; border-radius: 12px; text-align: center;
+    width: 90%; max-width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     transition: background-color 0.3s ease;
 }
-
 .ocupada { background-color: var(--status-ocupada); }
 .livre { background-color: var(--status-livre); }
-
-h1 {
-    margin: 0;
-    font-size: 1.8em;
-}
-
-p {
-    margin-top: 5px;
-    font-size: 0.9em;
-    word-wrap: break-word;
-    /* --- APLICAÇÃO DA NOVA COR --- */
-    color: var(--secondary-text-color);
-}
-
+h1 { margin: 0; font-size: 1.8em; }
+p { margin-top: 5px; font-size: 0.9em; word-wrap: break-word; color: var(--secondary-text-color); }
 #actions {
-    margin-top: 30px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    width: 100%;
-    max-width: 500px;
+    margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 15px; width: 100%; max-width: 500px;
 }
-
 button {
-    padding: 20px;
-    font-size: 1em;
-    font-weight: 600;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: transform 0.1s ease, filter 0.2s;
+    padding: 20px; font-size: 1em; font-weight: 600; border: none; border-radius: 12px;
+    cursor: pointer; transition: transform 0.1s ease, filter 0.2s;
 }
-
 button:active { transform: scale(0.95); }
 button:hover { filter: brightness(1.1); }
-
 .eu-audi { background-color: var(--accent-blue); color: var(--primary-text-color); }
 .angelica-audi { background-color: var(--accent-teal); color: var(--background-color); }
 .angelica-fit { background-color: var(--accent-yellow); color: var(--background-color); }
 .nicolas-fit { background-color: var(--accent-grey); color: var(--primary-text-color); }
 .saida { background-color: var(--accent-orange); color: var(--background-color); grid-column: 1 / -1; }
-
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.7); display: none; justify-content: center;
     align-items: center; z-index: 1000;
 }
-
 .modal-content {
-    background: var(--surface-color);
-    color: var(--primary-text-color);
-    padding: 25px;
-    border-radius: 14px;
-    width: 90%;
-    max-width: 400px;
-    text-align: center;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    background: var(--surface-color); color: var(--primary-text-color);
+    padding: 25px; border-radius: 14px; width: 90%; max-width: 400px;
+    text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
-
 .modal-content h3 { margin-top: 0; margin-bottom: 20px; }
 .modal-actions button { width: 100%; margin-bottom: 10px; }
 .modal-actions button:last-child { margin-bottom: 0; }
 .btn-close { background-color: var(--accent-grey); color: var(--primary-text-color); margin-top: 15px; }
 .btn-force-occupy { background-color: var(--accent-yellow); color: var(--background-color); }
-
 #ptr-indicator {
     position: absolute; top: -50px; left: 0; right: 0; height: 50px;
     display: flex; justify-content: center; align-items: center;
     font-size: 2em; color: var(--secondary-text-color);
     transition: transform 0.2s;
 }
-
 .ptr-icon-rotate { transform: rotate(180deg); }

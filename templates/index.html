@@ -25,10 +25,25 @@
     </div>
 
     <div id="saida-modal" class="modal-overlay" onclick="closeSaidaModal()">
+        <div class="modal-content" onclick="event.stopPropagation();">
+            <h3>Quem está saindo?</h3>
+            <div class="modal-actions">
+                <button class="eu-audi" onclick="confirmarSaida('Willian')">Willian</button>
+                <button class="angelica-audi" onclick="confirmarSaida('Angelica')">Angelica</button>
+                <button class="nicolas-fit" onclick="confirmarSaida('Nicolas')">Nicolas</button>
+                <button class="btn-close" onclick="closeSaidaModal()">Cancelar</button>
+            </div>
         </div>
+    </div>
     <div id="warning-modal" class="modal-overlay" onclick="closeWarningModal()">
+        <div class="modal-content" onclick="event.stopPropagation();">
+            <h3 id="warning-modal-text">A vaga já está ocupada.</h3>
+            <div class="modal-actions">
+                <button id="force-occupy-btn" class="btn-force-occupy">Liberar e Ocupar</button>
+                <button class="btn-close" onclick="closeWarningModal()">Voltar</button>
+            </div>
         </div>
-
+    </div>
     <div style="margin-top: 20px; text-align: center;">
         <button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: var(--surface-color); color: var(--primary-text-color); border: none; border-radius: 12px;">
             Ativar Notificações
@@ -36,7 +51,176 @@
     </div>
 
     <script>
-        // ... (código JavaScript completo da resposta anterior) ...
+        // Envolvemos todo o código em um único evento para garantir que a página esteja pronta
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- Elementos da Página ---
+            const statusBox = document.getElementById('status-box');
+            const statusText = document.getElementById('status-text');
+            const statusDetails = document.getElementById('status-details');
+            const saidaModal = document.getElementById('saida-modal');
+            const warningModal = document.getElementById('warning-modal');
+            let currentStatus = {};
+
+            // --- Lógica Principal da Interface ---
+            window.updateStatusDisplay = function(data) {
+                currentStatus = data;
+                statusText.textContent = `GARAGEM ${data.status}`;
+                if (data.status === 'OCUPADA') {
+                    statusDetails.textContent = `Por ${data.pessoa} com o ${data.carro} desde ${data.timestamp}`;
+                    statusBox.className = 'ocupada';
+                } else {
+                    statusDetails.textContent = `Liberada por último por ${data.pessoa} em ${data.timestamp}`;
+                    statusBox.className = 'livre';
+                }
+            }
+
+            async function sendUpdateToServer(pessoa, carro, acao) {
+                await fetch('/api/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pessoa, carro, acao })
+                });
+            }
+            
+            window.tryToOccupy = function(novaPessoa, novoCarro) {
+                if (currentStatus.status === 'LIVRE') {
+                    updateStatusDisplay({ status: 'OCUPADA', pessoa: novaPessoa, carro: novoCarro, timestamp: 'agora...' });
+                    sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
+                } else {
+                    const warningText = document.getElementById('warning-modal-text');
+                    warningText.textContent = `Vaga ocupada por ${currentStatus.pessoa}. Deseja continuar?`;
+                    const forceButton = document.getElementById('force-occupy-btn');
+                    forceButton.onclick = () => forceOccupy(novaPessoa, novoCarro);
+                    openWarningModal();
+                }
+            }
+            
+            function forceOccupy(novaPessoa, novoCarro) {
+                updateStatusDisplay({ status: 'OCUPADA', pessoa: novaPessoa, carro: novoCarro, timestamp: 'agora...' });
+                sendUpdateToServer(novaPessoa, currentStatus.carro, 'SAIDA');
+                sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
+                closeWarningModal();
+            }
+            
+            window.openSaidaModal = function() { saidaModal.style.display = 'flex'; }
+            window.closeSaidaModal = function() { saidaModal.style.display = 'none'; }
+            
+            window.confirmarSaida = function(pessoa) {
+                updateStatusDisplay({ status: 'LIVRE', pessoa: pessoa, carro: 'Nenhum', timestamp: 'agora...' });
+                sendUpdateToServer(pessoa, 'Qualquer', 'SAIDA');
+                closeSaidaModal();
+            }
+
+            window.openWarningModal = function() { warningModal.style.display = 'flex'; }
+            window.closeWarningModal = function() { warningModal.style.display = 'none'; }
+
+            // --- Lógica de Conexão e Atualização ---
+            async function fetchLatestStatus() {
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+                    updateStatusDisplay(data);
+                } catch (err) {
+                    console.error("Erro ao buscar status:", err);
+                    statusText.textContent = "Erro de Conexão";
+                }
+            }
+            
+            fetchLatestStatus();
+
+            const eventSource = new EventSource("/api/stream");
+            eventSource.onmessage = (event) => updateStatusDisplay(JSON.parse(event.data));
+            eventSource.onerror = (err) => console.error("Erro EventSource:", err);
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') fetchLatestStatus();
+            });
+
+            // --- Lógica de PWA e Notificações ---
+            const notificationsBtn = document.getElementById('notifications-btn');
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/service-worker.js').catch(err => console.error('Erro SW:', err));
+            } else {
+                notificationsBtn.style.display = 'none';
+            }
+            // (O restante do código de PWA e Pull-to-Refresh continua o mesmo)
+            // ...
+        });
     </script>
+    <script>
+      // script separado para o pull to refresh e PWA por clareza, mas poderia estar junto
+      // (código completo do pull-to-refresh e do PWA da resposta anterior vai aqui)
+       const ptrIndicator = document.getElementById('ptr-indicator');
+        const ptrIcon = ptrIndicator.querySelector('span');
+        const body = document.querySelector('body');
+        const ptrThreshold = 70;
+        let touchStartY = 0;
+        let isRefreshing = false;
+        body.addEventListener('touchstart', e => {
+            if (window.scrollY === 0) { touchStartY = e.touches[0].clientY; } else { touchStartY = -1; }
+        }, { passive: true });
+        body.addEventListener('touchmove', e => {
+            if (isRefreshing || touchStartY === -1) return;
+            const pullDistance = e.touches[0].clientY - touchStartY;
+            if (pullDistance > 0) {
+                e.preventDefault();
+                const translateY = Math.min(pullDistance, ptrThreshold * 1.5);
+                ptrIndicator.style.transform = `translateY(${translateY}px)`;
+                if (pullDistance > ptrThreshold) { ptrIcon.classList.add('ptr-icon-rotate'); } else { ptrIcon.classList.remove('ptr-icon-rotate'); }
+            }
+        }, { passive: false });
+        body.addEventListener('touchend', e => {
+            if (isRefreshing || touchStartY === -1) return;
+            const pullDistance = e.changedTouches[0].clientY - touchStartY;
+            if (pullDistance > ptrThreshold) {
+                isRefreshing = true;
+                ptrIcon.classList.add('ptr-icon-rotate');
+                ptrIndicator.style.transition = 'transform 0.2s';
+                ptrIndicator.style.transform = `translateY(50px)`;
+                location.reload();
+            } else {
+                ptrIndicator.style.transition = 'transform 0.2s';
+                ptrIndicator.style.transform = 'translateY(0)';
+                ptrIcon.classList.remove('ptr-icon-rotate');
+                setTimeout(() => { ptrIndicator.style.transition = ''; }, 200);
+            }
+        }, { passive: true });
+    
+        const notificationsBtn = document.getElementById('notifications-btn');
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/service-worker.js').catch(error => console.error('Falha no registro do SW:', error));
+        } else {
+            notificationsBtn.style.display = 'none';
+        }
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+            return outputArray;
+        }
+        async function subscribeUser() {
+            try {
+                const response = await fetch('/api/vapid_public_key');
+                const data = await response.json();
+                const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: convertedVapidKey });
+                await fetch('/api/subscribe', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } });
+                notificationsBtn.textContent = 'Notificações Ativadas!';
+                notificationsBtn.disabled = true;
+            } catch (error) {
+                console.error('Falha ao se inscrever:', error);
+                alert('Não foi possível ativar as notificações.');
+            }
+        }
+        notificationsBtn.addEventListener('click', () => {
+            if (Notification.permission === 'denied') { alert('As notificações foram bloqueadas nas configurações do navegador.'); return; }
+            Notification.requestPermission().then(permission => { if (permission === 'granted') { subscribeUser(); } });
+        });
+    </script>
+
 </body>
 </html>
