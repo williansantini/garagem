@@ -4,3 +4,6 @@
 # Arquivos de cache do Python
 __pycache__/
 *.pyc
+
+# Arquivo de variáveis de ambiente locais
+.env

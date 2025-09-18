@@ -13,6 +13,11 @@
         <h1 id="status-text">Carregando...</h1>
         <p id="status-details"></p>
     </div>
+
+    <div id="feira-aviso" style="display: none;">
+        <p><strong>Aviso:</strong> Hoje ou amanhã é dia de feira! Não estacione na Rua Santos ou na Rua Tupi.</p>
+    </div>
+
     <div id="actions">
         <button class="eu-audi" onclick="tryToOccupy('Willian', 'Audi')">Willian (Audi)</button>
         <button class="nicolas-fit" onclick="tryToOccupy('Nicolas', 'Fit')">Nicolas (Fit)</button>
@@ -102,6 +107,17 @@
                 }
             }
             
+            function verificarDiaDaFeira() {
+                const hoje = new Date();
+                const diaDaSemana = hoje.getDay(); 
+                const horaAtual = hoje.getHours(); 
+
+                if (diaDaSemana === 4 || (diaDaSemana === 5 && horaAtual < 12)) {
+                    document.getElementById('feira-aviso').style.display = 'block';
+                }
+            }
+            
+            verificarDiaDaFeira();
             fetchLatestStatus();
             setInterval(fetchLatestStatus, 5000);
 
