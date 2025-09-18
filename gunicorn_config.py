@@ -1,6 +1,5 @@
-# Configuração do Gunicorn para usar workers assíncronos (meinheld)
-# Essencial para aplicações com Server-Sent Events (SSE) e alta performance.
-worker_class = 'meinheld.gmeinheld.MeinheldWorker'
+# Configuração do Gunicorn para usar workers assíncronos (gevent)
+worker_class = 'gevent'
 workers = 1 
 threads = 10
 timeout = 120
