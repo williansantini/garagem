@@ -70,7 +70,6 @@ def send_notification_to_all(payload_title, payload_body):
             if ex.response:
                 print(f"--- [NOTIFICAÇÃO] Resposta do servidor de push: {ex.response.status_code}, {ex.response.text}")
 
-            # Se a inscrição for inválida (Gone ou Not Found), remove do banco
             if ex.response and ex.response.status_code in [404, 410]:
                 print(f"--- [NOTIFICAÇÃO] Removendo inscrição expirada do banco de dados.")
                 with engine.connect() as conn:
