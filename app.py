@@ -1,10 +1,11 @@
 import os
 import json
+import sys
+import subprocess
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
-from pywebpush import webpush, WebPushException
 import time
 from threading import Thread
 
@@ -14,9 +15,10 @@ app = Flask(__name__)
 DATABASE_URL = os.environ.get('DATABASE_URL')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY')
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY')
+VAPID_CLAIMS_EMAIL = "3.seixa_analogicos@icloud.com"
 
 if not all([DATABASE_URL, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
-    raise RuntimeError("As variáveis de ambiente DATABASE_URL, VAPID_PRIVATE_KEY e VAPID_PUBLIC_KEY devem estar configuradas.")
+    raise RuntimeError("As variáveis de ambiente devem estar configuradas.")
 
 engine = create_engine(DATABASE_URL)
 subscriptions_sse = []
@@ -31,27 +33,25 @@ def initialize_database():
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
         conn.commit()
 
-# --- LÓGICA DE NOTIFICAÇÃO EM THREAD ---
-def send_notification_task(payload_title, payload_body):
+# --- LÓGICA DE NOTIFICAÇÃO VIA SUBPROCESSO ---
+def send_notification_to_all(payload_title, payload_body):
     with app.app_context():
         with engine.connect() as conn:
             subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
+        
+        payload = json.dumps({"title": payload_title, "body": payload_body})
+        
         for sub_row in subscriptions:
-            try:
-                webpush(
-                    subscription_info=json.loads(sub_row[0]),
-                    data=json.dumps({"title": payload_title, "body": payload_body}),
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims={"sub": "mailto:3.seixa_analogicos@icloud.com"}
-                )
-            except WebPushException as ex:
-                if ex.response and ex.response.status_code in [404, 410]:
-                    with engine.connect() as conn_del:
-                        conn_del.execute(text("DELETE FROM subscriptions WHERE subscription_json = :sub_json;"), {"sub_json": sub_row[0]})
-                        conn_del.commit()
-
-def send_notification_to_all(payload_title, payload_body):
-    Thread(target=send_notification_task, args=(payload_title, payload_body)).start()
+            subscription_json = sub_row[0]
+            command = [
+                sys.executable,
+                "send_push.py",
+                subscription_json,
+                payload,
+                VAPID_PRIVATE_KEY,
+                VAPID_CLAIMS_EMAIL
+            ]
+            subprocess.Popen(command)
 
 # --- ROTAS DA APLICAÇÃO ---
 @app.route('/')
@@ -88,6 +88,7 @@ def update_status():
     if notification_title:
         send_notification_to_all(notification_title, notification_body)
     
+    # Atualização via SSE (ainda pode ser útil se o polling falhar)
     with engine.connect() as conn:
         result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
         status_json = json.dumps(dict(result._mapping))
