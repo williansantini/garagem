@@ -30,6 +30,11 @@
     <div id="warning-modal" class="modal-overlay" onclick="closeWarningModal()"><div class="modal-content" onclick="event.stopPropagation();"><h3 id="warning-modal-text">A vaga já está ocupada.</h3><div class="modal-actions"><button id="force-occupy-btn" class="btn-force-occupy">Liberar e Ocupar</button><button class="btn-close" onclick="closeWarningModal()">Voltar</button></div></div></div>
     <div style="margin-top: 20px; text-align: center;"><button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: var(--surface-color); color: var(--primary-text-color); border: none; border-radius: 12px;">Ativar Notificações</button></div>
 
+    <div id="apod-container" style="display: none;">
+        <h4 id="apod-title"></h4>
+        <img id="apod-image" src="" alt="Imagem Astronômica do Dia">
+        <p id="apod-explanation"></p>
+    </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const statusBox = document.getElementById('status-box');
@@ -116,9 +121,30 @@
                     document.getElementById('feira-aviso').style.display = 'block';
                 }
             }
+
+            // --- FUNÇÃO ADICIONADA PELA FEATURE APOD ---
+            async function fetchApod() {
+                try {
+                    const response = await fetch('/api/apod');
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    
+                    // Só exibe a imagem se for do tipo 'image'
+                    if (data.media_type === 'image') {
+                        document.getElementById('apod-container').style.display = 'block';
+                        document.getElementById('apod-title').textContent = data.title;
+                        document.getElementById('apod-image').src = data.url;
+                        document.getElementById('apod-explanation').textContent = data.explanation;
+                    }
+
+                } catch (err) {
+                    console.error("Erro ao buscar APOD:", err);
+                }
+            }
             
             verificarDiaDaFeira();
             fetchLatestStatus();
+            fetchApod(); // <--- CHAMADA DA FUNÇÃO ADICIONADA PELA FEATURE APOD
             setInterval(fetchLatestStatus, 5000);
 
             document.addEventListener('visibilitychange', () => {

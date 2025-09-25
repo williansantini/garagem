@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 import time
 from threading import Thread
 from dotenv import load_dotenv
+import requests # <--- ADICIONADO PELA FEATURE APOD
 
 # Carrega as variáveis do arquivo .env para o ambiente
 load_dotenv()
@@ -21,6 +22,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///local_dev.db')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY')
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY')
 VAPID_CLAIMS_EMAIL = "3.seixa_analogicos@icloud.com"
+NASA_API_KEY = os.environ.get('NASA_API_KEY', 'DEMO_KEY') # <--- ADICIONADO PELA FEATURE APOD
 
 if not all([VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
     raise RuntimeError("As variáveis VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY não foram encontradas. Verifique seu arquivo .env.")
@@ -55,12 +57,8 @@ def initialize_database():
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
         conn.commit()
 
-# O restante do seu app.py permanece exatamente o mesmo
-# (Lógica de notificação via subprocesso, rotas, etc.)
-
 # --- LÓGICA DE NOTIFICAÇÃO VIA SUBPROCESSO ---
 def send_notification_to_all(payload_title, payload_body):
-    # (código da função send_notification_to_all da resposta anterior)
     with app.app_context():
         with engine.connect() as conn:
             subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
@@ -122,6 +120,19 @@ def update_status():
     
     return jsonify({'message': 'Status atualizado com sucesso!'})
 
+# --- ROTA ADICIONADA PELA FEATURE APOD ---
+@app.route('/api/apod')
+def get_apod():
+    try:
+        # Faz a requisição para a API da NASA
+        response = requests.get(f'https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}')
+        response.raise_for_status()  # Lança um erro para respostas com status 4xx ou 5xx
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        # Em caso de erro, retorna uma mensagem genérica
+        print(f"Erro ao buscar dados da APOD: {e}")
+        return jsonify({"error": "Não foi possível buscar a imagem do dia."}), 500
+
 @app.route('/api/vapid_public_key')
 def get_vapid_public_key():
     return jsonify({'public_key': VAPID_PUBLIC_KEY})
@@ -151,5 +162,4 @@ with app.app_context():
     initialize_database()
 
 if __name__ == '__main__':
-    # O debug=True do Flask recarrega o servidor automaticamente quando você salva um arquivo
     app.run(host='0.0.0.0', port=5000, debug=True)

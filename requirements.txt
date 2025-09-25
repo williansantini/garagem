@@ -6,3 +6,4 @@ pywebpush==1.14.1
 gevent==23.9.1
 greenlet==3.0.3
 python-dotenv
+requests==2.31.0 # <--- ADICIONADO PELA FEATURE APOD
