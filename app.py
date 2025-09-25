@@ -1,3 +1,10 @@
+# --- CORREÇÃO PARA O RECURSIONERROR EM PRODUÇÃO ---
+# O monkey-patch do gevent deve ser a primeira coisa a ser executada
+# para garantir que todas as bibliotecas padrão (como ssl) sejam não-bloqueantes.
+from gevent import monkey
+monkey.patch_all()
+# --- FIM DA CORREÇÃO ---
+
 import os
 import json
 import sys
@@ -9,7 +16,7 @@ from sqlalchemy import create_engine, text
 import time
 from threading import Thread
 from dotenv import load_dotenv
-import requests # <--- ADICIONADO PELA FEATURE APOD
+import requests
 
 # Carrega as variáveis do arquivo .env para o ambiente
 load_dotenv()
@@ -29,7 +36,7 @@ if not all([VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
 engine = create_engine(DATABASE_URL)
 subscriptions_sse = []
 
-# --- INICIALIZAÇÃO DO BANCO DE DADOS (adaptada para SQLite) ---
+# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 def initialize_database():
     is_sqlite = DATABASE_URL.startswith('sqlite')
     log_table = """
@@ -55,7 +62,7 @@ def initialize_database():
             conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
         conn.commit()
 
-# --- LÓGICA DE NOTIFICAÇÃO VIA SUBPROCESSO ---
+# --- LÓGICA DE NOTIFICAÇÃO ---
 def send_notification_to_all(payload_title, payload_body):
     with app.app_context():
         with engine.connect() as conn:
@@ -118,20 +125,16 @@ def update_status():
     
     return jsonify({'message': 'Status atualizado com sucesso!'})
 
-# --- CÓDIGO ALTERADO PARA DIAGNÓSTICO ---
 @app.route('/api/apod')
 def get_apod():
     try:
         api_url = f'https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}'
-        # Adiciona um timeout para evitar que a requisição prenda o servidor indefinidamente
         response = requests.get(api_url, timeout=10) 
-        # Lança um erro para respostas com status 4xx (ex: API key inválida) ou 5xx
         response.raise_for_status()  
         return jsonify(response.json())
     except requests.exceptions.RequestException as e:
-        # Log do erro completo no servidor para diagnóstico
         error_message = f"[APOD ERROR] Falha ao buscar dados da NASA: {e}"
-        print(error_message, file=sys.stderr) # Imprime o erro no log do servidor
+        print(error_message, file=sys.stderr)
         return jsonify({"error": "Não foi possível buscar a imagem do dia."}), 500
 
 @app.route('/api/vapid_public_key')
