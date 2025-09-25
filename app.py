@@ -1,204 +1,169 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Status da Garagem</title>
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#1c1c1e"/>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div id="status-box">
-        <h1 id="status-text">Carregando...</h1>
-        <p id="status-details"></p>
-    </div>
+# --- CORREÇÃO PARA O RECURSIONERROR EM PRODUÇÃO ---
+# O monkey-patch do gevent deve ser a primeira coisa a ser executada
+# para garantir que todas as bibliotecas padrão (como ssl) sejam não-bloqueantes.
+from gevent import monkey
+monkey.patch_all()
+# --- FIM DA CORREÇÃO ---
 
-    <div id="feira-aviso" style="display: none;">
-        <p><strong>Aviso:</strong> Hoje ou amanhã é dia de feira! Não estacione na Rua Santos ou na Rua Tupi.</p>
-    </div>
+import os
+import json
+import sys
+import subprocess
+from flask import Flask, render_template, request, jsonify, Response, send_from_directory
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from sqlalchemy import create_engine, text
+import time
+from threading import Thread
+from dotenv import load_dotenv
+import requests
 
-    <div id="actions">
-        <button class="eu-audi" onclick="tryToOccupy('Willian', 'Audi')">Willian (Audi)</button>
-        <button class="nicolas-fit" onclick="tryToOccupy('Nicolas', 'Fit')">Nicolas (Fit)</button>
-        <button class="angelica-audi" onclick="tryToOccupy('Angelica', 'Audi')">Angelica (Audi)</button>
-        <button class="angelica-fit" onclick="tryToOccupy('Angelica', 'Fit')">Angelica (Fit)</button>
-        <button class="saida" onclick="openSaidaModal()">Liberei a Garagem</button>
-    </div>
+# Carrega as variáveis do arquivo .env para o ambiente
+load_dotenv()
 
-    <div id="saida-modal" class="modal-overlay" onclick="closeSaidaModal()"><div class="modal-content" onclick="event.stopPropagation();"><h3>Quem está saindo?</h3><div class="modal-actions"><button class="eu-audi" onclick="confirmarSaida('Willian')">Willian</button><button class="angelica-audi" onclick="confirmarSaida('Angelica')">Angelica</button><button class="nicolas-fit" onclick="confirmarSaida('Nicolas')">Nicolas</button><button class="btn-close" onclick="closeSaidaModal()">Cancelar</button></div></div></div>
-    <div id="warning-modal" class="modal-overlay" onclick="closeWarningModal()"><div class="modal-content" onclick="event.stopPropagation();"><h3 id="warning-modal-text">A vaga já está ocupada.</h3><div class="modal-actions"><button id="force-occupy-btn" class="btn-force-occupy">Liberar e Ocupar</button><button class="btn-close" onclick="closeWarningModal()">Voltar</button></div></div></div>
-    <div style="margin-top: 20px; text-align: center;"><button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: var(--surface-color); color: var(--primary-text-color); border: none; border-radius: 12px;">Ativar Notificações</button></div>
+app = Flask(__name__)
 
-    <div id="apod-container" style="display: none;">
-        <h4 id="apod-title"></h4>
-        <img id="apod-image" src="" alt="Imagem Astronômica do Dia">
-        <p id="apod-explanation"></p>
-    </div>
+# --- CONFIGURAÇÃO DAS VARIÁVEIS DE AMBIENTE ---
+DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///local_dev.db')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY')
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY')
+VAPID_CLAIMS_EMAIL = "3.seixa_analogicos@icloud.com"
+NASA_API_KEY = os.environ.get('NASA_API_KEY', 'DEMO_KEY')
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const statusBox = document.getElementById('status-box');
-            const statusText = document.getElementById('status-text');
-            const statusDetails = document.getElementById('status-details');
-            const saidaModal = document.getElementById('saida-modal');
-            const warningModal = document.getElementById('warning-modal');
-            let currentStatus = {};
-            let lastStatusString = "";
+if not all([VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
+    raise RuntimeError("As variáveis VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY não foram encontradas. Verifique seu arquivo .env.")
 
-            window.updateStatusDisplay = function(data) {
-                const newStatusString = JSON.stringify(data);
-                if (newStatusString === lastStatusString) return; 
-                lastStatusString = newStatusString;
+engine = create_engine(DATABASE_URL)
+subscriptions_sse = []
 
-                currentStatus = data;
-                statusText.textContent = `GARAGEM ${data.status}`;
-                if (data.status === 'OCUPADA') {
-                    statusDetails.textContent = `Por ${data.pessoa} com o ${data.carro} desde ${data.timestamp}`;
-                    statusBox.className = 'ocupada';
-                } else {
-                    statusDetails.textContent = `Liberada por último por ${data.pessoa} em ${data.timestamp}`;
-                    statusBox.className = 'livre';
-                }
-            }
+# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
+def initialize_database():
+    is_sqlite = DATABASE_URL.startswith('sqlite')
+    log_table = """
+    CREATE TABLE IF NOT EXISTS log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp VARCHAR(50), pessoa VARCHAR(50), carro VARCHAR(50), acao VARCHAR(20)
+    );"""
+    subscriptions_table = """
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subscription_json TEXT NOT NULL UNIQUE
+    );"""
+    
+    if not is_sqlite:
+        log_table = log_table.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        subscriptions_table = subscriptions_table.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
 
-            async function sendUpdateToServer(pessoa, carro, acao) {
-                await fetch('/api/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pessoa, carro, acao })
-                });
-                fetchLatestStatus();
-            }
-            
-            window.tryToOccupy = function(novaPessoa, novoCarro) {
-                if (currentStatus.status === 'LIVRE' || !currentStatus.status) {
-                    sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
-                } else {
-                    const warningText = document.getElementById('warning-modal-text');
-                    warningText.textContent = `Vaga ocupada por ${currentStatus.pessoa}. Deseja continuar?`;
-                    const forceButton = document.getElementById('force-occupy-btn');
-                    forceButton.onclick = () => forceOccupy(novaPessoa, novoCarro);
-                    openWarningModal();
-                }
-            }
-            
-            function forceOccupy(novaPessoa, novoCarro) {
-                sendUpdateToServer(currentStatus.pessoa, currentStatus.carro, 'SAIDA');
-                setTimeout(() => {
-                    sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
-                }, 250);
-                closeWarningModal();
-            }
-            
-            window.openSaidaModal = function() { saidaModal.style.display = 'flex'; }
-            window.closeSaidaModal = function() { saidaModal.style.display = 'none'; }
-            
-            window.confirmarSaida = function(pessoa) {
-                sendUpdateToServer(pessoa, 'Qualquer', 'SAIDA');
-                closeSaidaModal();
-            }
+    with engine.connect() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS status (id INT PRIMARY KEY, status VARCHAR(20), carro VARCHAR(50), pessoa VARCHAR(50), timestamp VARCHAR(50));"))
+        conn.execute(text(log_table))
+        conn.execute(text(subscriptions_table))
+        if conn.execute(text("SELECT COUNT(*) FROM status WHERE id = 1;")).scalar() == 0:
+            conn.execute(text("INSERT INTO status (id, status, carro, pessoa, timestamp) VALUES (1, 'LIVRE', 'Nenhum', 'Ninguém', '');"))
+        conn.commit()
 
-            window.openWarningModal = function() { warningModal.style.display = 'flex'; }
-            window.closeWarningModal = function() { warningModal.style.display = 'none'; }
+# --- LÓGICA DE NOTIFICAÇÃO ---
+def send_notification_to_all(payload_title, payload_body):
+    with app.app_context():
+        with engine.connect() as conn:
+            subscriptions = conn.execute(text("SELECT subscription_json FROM subscriptions;")).fetchall()
+        
+        payload = json.dumps({"title": payload_title, "body": payload_body})
+        
+        for sub_row in subscriptions:
+            subscription_json = sub_row[0]
+            command = [
+                sys.executable,
+                "send_push.py",
+                subscription_json,
+                payload,
+                VAPID_PRIVATE_KEY,
+                VAPID_CLAIMS_EMAIL
+            ]
+            subprocess.Popen(command)
 
-            async function fetchLatestStatus() {
-                try {
-                    const response = await fetch('/api/status');
-                    if (!response.ok) return;
-                    const data = await response.json();
-                    updateStatusDisplay(data);
-                } catch (err) {
-                    console.error("Erro ao buscar status:", err);
-                }
-            }
-            
-            function verificarDiaDaFeira() {
-                const hoje = new Date();
-                const diaDaSemana = hoje.getDay(); 
-                const horaAtual = hoje.getHours(); 
+# --- ROTAS DA APLICAÇÃO ---
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-                if (diaDaSemana === 4 || (diaDaSemana === 5 && horaAtual < 12)) {
-                    document.getElementById('feira-aviso').style.display = 'block';
-                }
-            }
-            
-            // --- CÓDIGO CORRIGIDO DA FEATURE APOD ---
-            async function fetchApod() {
-                try {
-                    const response = await fetch('/api/apod');
-                    if (!response.ok) return;
-                    const data = await response.json();
-                    
-                    if (data.media_type === 'image') {
-                        document.getElementById('apod-container').style.display = 'block';
-                        document.getElementById('apod-title').textContent = data.title;
-                        document.getElementById('apod-image').src = data.url;
-                        
-                        const explanationP = document.getElementById('apod-explanation');
-                        // Limpa o conteúdo anterior e adiciona o texto da explicação com um espaço no final
-                        explanationP.textContent = data.explanation + ' '; 
-                        
-                        // Cria o elemento de link <a>
-                        const hdLink = document.createElement('a');
-                        hdLink.href = data.hdurl || data.url; // Usa hdurl se existir, senão a url padrão
-                        hdLink.textContent = 'Ver em alta resolução.';
-                        hdLink.target = '_blank'; // Garante que o link abra em uma nova aba
-                        
-                        // Adiciona o link ao final do parágrafo da explicação
-                        explanationP.appendChild(hdLink);
-                    }
+@app.route('/service-worker.js')
+def service_worker():
+    return send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
 
-                } catch (err) {
-                    console.error("Erro ao buscar APOD:", err);
-                }
-            }
-            
-            verificarDiaDaFeira();
-            fetchLatestStatus();
-            fetchApod(); 
-            setInterval(fetchLatestStatus, 5000);
+@app.route('/api/status')
+def get_status():
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
+        return jsonify(dict(result._mapping) if result else {"status": "LIVRE", "carro": "Nenhum", "pessoa": "Sistema", "timestamp": ""})
 
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') fetchLatestStatus();
-            });
+@app.route('/api/update', methods=['POST'])
+def update_status():
+    data = request.json
+    pessoa, carro, acao = data.get('pessoa'), data.get('carro'), data.get('acao')
+    now_str = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime('%d/%m/%Y %H:%M:%S')
+    notification_title, notification_body = "", ""
 
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('Erro SW:', err));
-            } else {
-                document.getElementById('notifications-btn').style.display = 'none';
-            }
-        });
-    </script>
-    <script>
-      const notificationsBtn = document.getElementById('notifications-btn');
-      function urlBase64ToUint8Array(base64String) {
-          const padding = '='.repeat((4 - base64String.length % 4) % 4);
-          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-          const rawData = window.atob(base64);
-          const outputArray = new Uint8Array(rawData.length);
-          for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
-          return outputArray;
-      }
-      async function subscribeUser() {
-          try {
-              const response = await fetch('/api/vapid_public_key');
-              const data = await response.json();
-              const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
-              const registration = await navigator.serviceWorker.ready;
-              const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: convertedVapidKey });
-              await fetch('/api/subscribe', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } });
-              notificationsBtn.textContent = 'Notificações Ativadas!';
-              notificationsBtn.disabled = true;
-          } catch (error) {
-              console.error('Falha ao se inscrever:', error);
-              alert('Não foi possível ativar as notificações.');
-          }
-      }
-      notificationsBtn.addEventListener('click', () => {
-          if (Notification.permission === 'denied') { alert('As notificações foram bloqueadas nas configurações do navegador.'); return; }
-          Notification.requestPermission().then(permission => { if (permission === 'granted') { subscribeUser(); } });
-      });
-    </script>
-</body>
-</html>
+    with engine.connect() as conn:
+        if acao == 'SAIDA':
+            conn.execute(text("UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"), {"p": pessoa, "ts": now_str})
+            notification_title, notification_body = "Vaga Livre!", f"{pessoa} acabou de sair da garagem."
+        elif acao == 'ENTRADA':
+            conn.execute(text("UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"), {"c": carro, "p": pessoa, "ts": now_str})
+            notification_title, notification_body = "Vaga Ocupada", f"{pessoa} acabou de chegar com o {carro}."
+        conn.execute(text("INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"), {"ts": now_str, "p": pessoa, "c": carro, "a": acao})
+        conn.commit()
+
+    if notification_title:
+        send_notification_to_all(notification_title, notification_body)
+    
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT status, carro, pessoa, timestamp FROM status WHERE id = 1;")).first()
+        status_json = json.dumps(dict(result._mapping))
+        for q in subscriptions_sse:
+            q.append(status_json)
+    
+    return jsonify({'message': 'Status atualizado com sucesso!'})
+
+@app.route('/api/apod')
+def get_apod():
+    try:
+        api_url = f'https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}'
+        response = requests.get(api_url, timeout=10) 
+        response.raise_for_status()  
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        error_message = f"[APOD ERROR] Falha ao buscar dados da NASA: {e}"
+        print(error_message, file=sys.stderr)
+        return jsonify({"error": "Não foi possível buscar a imagem do dia."}), 500
+
+@app.route('/api/vapid_public_key')
+def get_vapid_public_key():
+    return jsonify({'public_key': VAPID_PUBLIC_KEY})
+
+@app.route('/api/subscribe', methods=['POST'])
+def subscribe():
+    with engine.connect() as conn:
+        conn.execute(text("INSERT INTO subscriptions (subscription_json) VALUES (:sub) ON CONFLICT (subscription_json) DO NOTHING;"), {"sub": json.dumps(request.json)})
+        conn.commit()
+    return jsonify({'message': 'Inscrição recebida.'})
+
+@app.route('/api/stream')
+def stream():
+    def event_stream():
+        q = []
+        subscriptions_sse.append(q)
+        try:
+            while True:
+                yield f"data: {q.pop(0)}\n\n" if q else ": keep-alive\n\n"
+                time.sleep(15)
+        finally:
+            if q in subscriptions_sse:
+                subscriptions_sse.remove(q)
+    return Response(event_stream(), mimetype='text/event-stream')
+
+with app.app_context():
+    initialize_database()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

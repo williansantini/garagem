@@ -134,19 +134,15 @@
                         document.getElementById('apod-title').textContent = data.title;
                         document.getElementById('apod-image').src = data.url;
                         
-                        // --- INÍCIO DA ALTERAÇÃO ---
                         const explanationP = document.getElementById('apod-explanation');
-                        explanationP.textContent = data.explanation + ' '; // Adiciona um espaço
+                        explanationP.textContent = data.explanation + ' '; 
                         
-                        // Cria o link para a imagem em HD
                         const hdLink = document.createElement('a');
-                        hdLink.href = data.hdurl || data.url; // Usa hdurl se existir, senão a url padrão
+                        hdLink.href = data.hdurl || data.url;
                         hdLink.textContent = 'Ver em alta resolução.';
-                        hdLink.target = '_blank'; // Abre em uma nova aba
+                        hdLink.target = '_blank';
                         
-                        // Adiciona o link ao final do parágrafo
                         explanationP.appendChild(hdLink);
-                        // --- FIM DA ALTERAÇÃO ---
                     }
 
                 } catch (err) {
@@ -156,7 +152,7 @@
             
             verificarDiaDaFeira();
             fetchLatestStatus();
-            fetchApod();
+            fetchApod(); 
             setInterval(fetchLatestStatus, 5000);
 
             document.addEventListener('visibilitychange', () => {
