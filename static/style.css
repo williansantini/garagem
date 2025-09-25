@@ -106,7 +106,17 @@ button:hover { filter: brightness(1.1); }
     margin-bottom: 15px;
 }
 #apod-explanation {
-    font-size: 0.8em; /* Fonte menor, como solicitado */
+    font-size: 0.8em;
     text-align: justify;
     line-height: 1.5;
+}
+
+/* --- ALTERAÇÃO PARA COR DOS LINKS --- */
+a {
+    color: var(--accent-teal); /* Cor clara para links */
+    text-decoration: underline;
+}
+
+a:visited {
+    color: var(--accent-blue); /* Cor para links já visitados */
 }
