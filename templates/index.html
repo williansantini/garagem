@@ -35,6 +35,7 @@
         <img id="apod-image" src="" alt="Imagem Astronômica do Dia">
         <p id="apod-explanation"></p>
     </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const statusBox = document.getElementById('status-box');
@@ -121,20 +122,31 @@
                     document.getElementById('feira-aviso').style.display = 'block';
                 }
             }
-
-            // --- FUNÇÃO ADICIONADA PELA FEATURE APOD ---
+            
             async function fetchApod() {
                 try {
                     const response = await fetch('/api/apod');
                     if (!response.ok) return;
                     const data = await response.json();
                     
-                    // Só exibe a imagem se for do tipo 'image'
                     if (data.media_type === 'image') {
                         document.getElementById('apod-container').style.display = 'block';
                         document.getElementById('apod-title').textContent = data.title;
                         document.getElementById('apod-image').src = data.url;
-                        document.getElementById('apod-explanation').textContent = data.explanation;
+                        
+                        // --- INÍCIO DA ALTERAÇÃO ---
+                        const explanationP = document.getElementById('apod-explanation');
+                        explanationP.textContent = data.explanation + ' '; // Adiciona um espaço
+                        
+                        // Cria o link para a imagem em HD
+                        const hdLink = document.createElement('a');
+                        hdLink.href = data.hdurl || data.url; // Usa hdurl se existir, senão a url padrão
+                        hdLink.textContent = 'Ver em alta resolução.';
+                        hdLink.target = '_blank'; // Abre em uma nova aba
+                        
+                        // Adiciona o link ao final do parágrafo
+                        explanationP.appendChild(hdLink);
+                        // --- FIM DA ALTERAÇÃO ---
                     }
 
                 } catch (err) {
@@ -144,7 +156,7 @@
             
             verificarDiaDaFeira();
             fetchLatestStatus();
-            fetchApod(); // <--- CHAMADA DA FUNÇÃO ADICIONADA PELA FEATURE APOD
+            fetchApod();
             setInterval(fetchLatestStatus, 5000);
 
             document.addEventListener('visibilitychange', () => {
