@@ -17,12 +17,11 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- CONFIGURAÇÃO DAS VARIÁVEIS DE AMBIENTE ---
-# Se DATABASE_URL não estiver definida (ambiente local), usa um arquivo SQLite
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///local_dev.db')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY')
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY')
 VAPID_CLAIMS_EMAIL = "3.seixa_analogicos@icloud.com"
-NASA_API_KEY = os.environ.get('NASA_API_KEY', 'DEMO_KEY') # <--- ADICIONADO PELA FEATURE APOD
+NASA_API_KEY = os.environ.get('NASA_API_KEY', 'DEMO_KEY')
 
 if not all([VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
     raise RuntimeError("As variáveis VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY não foram encontradas. Verifique seu arquivo .env.")
@@ -33,7 +32,6 @@ subscriptions_sse = []
 # --- INICIALIZAÇÃO DO BANCO DE DADOS (adaptada para SQLite) ---
 def initialize_database():
     is_sqlite = DATABASE_URL.startswith('sqlite')
-    # Adaptações para compatibilidade entre PostgreSQL (SERIAL) e SQLite (AUTOINCREMENT)
     log_table = """
     CREATE TABLE IF NOT EXISTS log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,17 +118,20 @@ def update_status():
     
     return jsonify({'message': 'Status atualizado com sucesso!'})
 
-# --- ROTA ADICIONADA PELA FEATURE APOD ---
+# --- CÓDIGO ALTERADO PARA DIAGNÓSTICO ---
 @app.route('/api/apod')
 def get_apod():
     try:
-        # Faz a requisição para a API da NASA
-        response = requests.get(f'https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}')
-        response.raise_for_status()  # Lança um erro para respostas com status 4xx ou 5xx
+        api_url = f'https://api.nasa.gov/planetary/apod?api_key={NASA_API_KEY}'
+        # Adiciona um timeout para evitar que a requisição prenda o servidor indefinidamente
+        response = requests.get(api_url, timeout=10) 
+        # Lança um erro para respostas com status 4xx (ex: API key inválida) ou 5xx
+        response.raise_for_status()  
         return jsonify(response.json())
     except requests.exceptions.RequestException as e:
-        # Em caso de erro, retorna uma mensagem genérica
-        print(f"Erro ao buscar dados da APOD: {e}")
+        # Log do erro completo no servidor para diagnóstico
+        error_message = f"[APOD ERROR] Falha ao buscar dados da NASA: {e}"
+        print(error_message, file=sys.stderr) # Imprime o erro no log do servidor
         return jsonify({"error": "Não foi possível buscar a imagem do dia."}), 500
 
 @app.route('/api/vapid_public_key')
