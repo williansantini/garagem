@@ -106,7 +106,7 @@ button:hover { filter: brightness(1.1); }
     margin-bottom: 15px;
 }
 #apod-explanation {
-    font-size: 0.8em;
+    font-size: 1em;
     text-align: justify;
     line-height: 1.5;
 }
