@@ -1,0 +1,40 @@
+{
+  "carNames": {
+    "audi": "Audi",
+    "fit": "Fit"
+  },
+  "status": {
+    "loading": "Carregando...",
+    "garageStatus": "GARAGEM {status}",
+    "occupiedBy": "Por {person} com o {car} desde {timestamp}",
+    "vacantLastFreedBy": "Liberada por último por {person} em {timestamp}"
+  },
+  "warnings": {
+    "marketDay": "<strong>Aviso:</strong> Hoje ou amanhã é dia de feira! Não estacione na Rua Santos ou na Rua Tupi.",
+    "occupied": "A vaga já está ocupada.",
+    "occupiedBySomeone": "Vaga ocupada por {person}. Deseja continuar?",
+    "couldNotGetImage": "Não foi possível buscar a imagem do dia.",
+    "notificationsBlocked": "As notificações foram bloqueadas nas configurações do navegador.",
+    "notificationsFailed": "Não foi possível ativar as notificações."
+  },
+  "buttons": {
+    "freeGarage": "Liberei a Garagem",
+    "activateNotifications": "Ativar Notificações",
+    "notificationsActivated": "Notificações Ativadas!",
+    "releaseAndOccupy": "Liberar e Ocupar",
+    "back": "Voltar",
+    "cancel": "Cancelar"
+  },
+  "modals": {
+    "whoIsLeaving": "Quem está saindo?"
+  },
+  "notifications": {
+    "vacantTitle": "Vaga Livre!",
+    "vacantBody": "{person} acabou de sair da garagem.",
+    "occupiedTitle": "Vaga Ocupada",
+    "occupiedBody": "{person} acabou de chegar com o {car}."
+  },
+  "apod": {
+    "viewInHd": "Ver em alta resolução."
+  }
+}

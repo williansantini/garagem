@@ -36,6 +36,12 @@ if not all([VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY]):
 engine = create_engine(DATABASE_URL)
 subscriptions_sse = []
 
+# --- FEATURE: EXTERNALIZAR STRINGS ---
+# Carrega as strings de um arquivo JSON
+with open('strings.json', 'r', encoding='utf-8') as f:
+    strings = json.load(f)
+# --- FIM DA FEATURE ---
+
 # --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 def initialize_database():
     is_sqlite = DATABASE_URL.startswith('sqlite')
@@ -87,6 +93,13 @@ def send_notification_to_all(payload_title, payload_body):
 def index():
     return render_template('index.html')
 
+# --- FEATURE: EXTERNALIZAR STRINGS ---
+# Rota para servir o arquivo de strings
+@app.route('/api/strings')
+def get_strings():
+    return jsonify(strings)
+# --- FIM DA FEATURE ---
+
 @app.route('/service-worker.js')
 def service_worker():
     return send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
@@ -107,10 +120,17 @@ def update_status():
     with engine.connect() as conn:
         if acao == 'SAIDA':
             conn.execute(text("UPDATE status SET status='LIVRE', carro='Nenhum', pessoa=:p, timestamp=:ts WHERE id=1;"), {"p": pessoa, "ts": now_str})
-            notification_title, notification_body = "Vaga Livre!", f"{pessoa} acabou de sair da garagem."
+            # --- FEATURE: EXTERNALIZAR STRINGS ---
+            notification_title = strings["notifications"]["vacantTitle"]
+            notification_body = strings["notifications"]["vacantBody"].format(person=pessoa)
+            # --- FIM DA FEATURE ---
         elif acao == 'ENTRADA':
             conn.execute(text("UPDATE status SET status='OCUPADA', carro=:c, pessoa=:p, timestamp=:ts WHERE id=1;"), {"c": carro, "p": pessoa, "ts": now_str})
-            notification_title, notification_body = "Vaga Ocupada", f"{pessoa} acabou de chegar com o {carro}."
+            # --- FEATURE: EXTERNALIZAR STRINGS ---
+            notification_title = strings["notifications"]["occupiedTitle"]
+            # Mantendo a lógica original de como o nome do carro é exibido na notificação
+            notification_body = strings["notifications"]["occupiedBody"].format(person=pessoa, car=carro)
+            # --- FIM DA FEATURE ---
         conn.execute(text("INSERT INTO log (timestamp, pessoa, carro, acao) VALUES (:ts, :p, :c, :a);"), {"ts": now_str, "p": pessoa, "c": carro, "a": acao})
         conn.commit()
 
@@ -135,7 +155,9 @@ def get_apod():
     except requests.exceptions.RequestException as e:
         error_message = f"[APOD ERROR] Falha ao buscar dados da NASA: {e}"
         print(error_message, file=sys.stderr)
-        return jsonify({"error": "Não foi possível buscar a imagem do dia."}), 500
+        # --- FEATURE: EXTERNALIZAR STRINGS ---
+        return jsonify({"error": strings["warnings"]["couldNotGetImage"]}), 500
+        # --- FIM DA FEATURE ---
 
 @app.route('/api/vapid_public_key')
 def get_vapid_public_key():
