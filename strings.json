@@ -1,12 +1,12 @@
 {
   "carNames": {
-    "audi": "Audi",
-    "fit": "Fit"
+    "audi": "o Audi",
+    "fit": "a Fit"
   },
   "status": {
     "loading": "Carregando...",
     "garageStatus": "GARAGEM {status}",
-    "occupiedBy": "Por {person} com o {car} desde {timestamp}",
+    "occupiedBy": "Por {person} com {car} desde {timestamp}",
     "vacantLastFreedBy": "Liberada por último por {person} em {timestamp}"
   },
   "warnings": {
@@ -32,7 +32,7 @@
     "vacantTitle": "Vaga Livre!",
     "vacantBody": "{person} acabou de sair da garagem.",
     "occupiedTitle": "Vaga Ocupada",
-    "occupiedBody": "{person} acabou de chegar com o {car}."
+    "occupiedBody": "{person} acabou de chegar com {car}."
   },
   "apod": {
     "viewInHd": "Ver em alta resolução."
