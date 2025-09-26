@@ -10,7 +10,7 @@
     "vacantLastFreedBy": "Liberada por último por {person} em {timestamp}"
   },
   "warnings": {
-    "marketDay": "É dia de feira! Quarta-feira, quinta-feira, sexta-feira. Não importa a feira. Não estacione na <strong>Rua Santos ou na Rua Tupi.</strong>",
+    "marketDay": "É dia de feira! Quarta-feira, quinta-feira, sexta-feira. Não importa a feira: não estacione na <strong>Rua Santos ou na Rua Tupi.</strong>",
     "occupied": "A vaga já está ocupada.",
     "occupiedBySomeone": "Vaga ocupada por {person}. Deseja continuar?",
     "couldNotGetImage": "Não foi possível buscar a imagem do dia.",
