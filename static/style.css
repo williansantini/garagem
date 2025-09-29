@@ -27,17 +27,17 @@ body {
     max-width: 400px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     transition: background-color 0.3s ease;
-    display: flex; /* <-- Alterado */
-    align-items: center; /* <-- Alterado */
-    gap: 15px; /* <-- Adicionado para espaçar a imagem do texto */
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
 }
 #status-icon {
-    width: 65px;
-    height: 65px;
+    width: 80px; /* <-- Aumentado de 65px para 80px */
+    height: 80px; /* <-- Aumentado de 65px para 80px */
     border-radius: 50%;
     object-fit: cover;
     border: 3px solid rgba(255, 255, 255, 0.6);
-    flex-shrink: 0; /* Impede que a imagem encolha */
+    flex-shrink: 0; 
 }
 #status-text-container {
     display: flex;
