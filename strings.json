@@ -15,12 +15,15 @@
     "occupiedBySomeone": "Vaga ocupada por {person}. Deseja continuar?",
     "couldNotGetImage": "Não foi possível buscar a imagem do dia.",
     "notificationsBlocked": "As notificações foram bloqueadas nas configurações do navegador.",
-    "notificationsFailed": "Não foi possível ativar as notificações."
+    "notificationsFailed": "Não foi possível ativar as notificações.",
+    "deactivationFailed": "Falha ao desativar as notificações."
   },
   "buttons": {
     "freeGarage": "Liberei a Garagem",
     "activateNotifications": "Ativar Notificações",
     "notificationsActivated": "Notificações Ativadas!",
+    "disableNotifications": "Desativar Notificações",
+    "notificationsDeactivated": "Notificações Desativadas!",
     "releaseAndOccupy": "Liberar e Ocupar",
     "back": "Voltar",
     "cancel": "Cancelar"

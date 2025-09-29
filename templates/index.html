@@ -54,16 +54,18 @@
     </div>
 
     <script>
+        // Variável `strings` no escopo global para ser acessível por ambos os scripts.
+        let strings = {}; 
+        
         document.addEventListener('DOMContentLoaded', async () => {
             const statusBox = document.getElementById('status-box');
             const statusText = document.getElementById('status-text');
             const statusDetails = document.getElementById('status-details');
             const saidaModal = document.getElementById('saida-modal');
             const warningModal = document.getElementById('warning-modal');
-            const statusIcon = document.getElementById('status-icon'); // --- FEATURE: IMAGEM DINÂMICA ---
+            const statusIcon = document.getElementById('status-icon');
             let currentStatus = {};
             let lastStatusString = "";
-            let strings = {}; 
 
             async function fetchStrings() {
                 try {
@@ -84,7 +86,6 @@
                 document.getElementById('cancel-btn-saida').textContent = strings.buttons.cancel;
                 document.getElementById('force-occupy-btn').textContent = strings.buttons.releaseAndOccupy;
                 document.getElementById('back-btn-warning').textContent = strings.buttons.back;
-                document.getElementById('notifications-btn').textContent = strings.buttons.activateNotifications;
             }
 
             window.updateStatusDisplay = function(data) {
@@ -100,13 +101,13 @@
                         .replace('{car}', data.carro)
                         .replace('{timestamp}', data.timestamp);
                     statusBox.className = 'ocupada';
-                    statusIcon.src = '/static/gato_ocupado.jpg'; // --- FEATURE: IMAGEM DINÂMICA ---
+                    statusIcon.src = '/static/gato_ocupado.jpg';
                 } else {
                     statusDetails.textContent = strings.status.vacantLastFreedBy
                         .replace('{person}', data.pessoa)
                         .replace('{timestamp}', data.timestamp);
                     statusBox.className = 'livre';
-                    statusIcon.src = '/static/gato_livre.jpg'; // --- FEATURE: IMAGEM DINÂMICA ---
+                    statusIcon.src = '/static/gato_livre.jpg';
                 }
             }
 
@@ -208,50 +209,129 @@
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') fetchLatestStatus();
             });
-
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/service-worker.js').catch(err => console.error('Erro SW:', err));
-            } else {
-                document.getElementById('notifications-btn').style.display = 'none';
-            }
         });
     </script>
     <script>
-      const notificationsBtn = document.getElementById('notifications-btn');
-      function urlBase64ToUint8Array(base64String) {
-          const padding = '='.repeat((4 - base64String.length % 4) % 4);
-          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-          const rawData = window.atob(base64);
-          const outputArray = new Uint8Array(rawData.length);
-          for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
-          return outputArray;
-      }
-      async function subscribeUser() {
-          try {
-              const strResponse = await fetch('/api/strings'); 
-              const strings = await strResponse.json(); 
-              const response = await fetch('/api/vapid_public_key');
-              const data = await response.json();
-              const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
-              const registration = await navigator.serviceWorker.ready;
-              const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: convertedVapidKey });
-              await fetch('/api/subscribe', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } });
-              notificationsBtn.textContent = strings.buttons.notificationsActivated; 
-              notificationsBtn.disabled = true;
-          } catch (error) {
-              console.error('Falha ao se inscrever:', error);
-              alert(strings.warnings.notificationsFailed); 
-          }
-      }
-      notificationsBtn.addEventListener('click', async () => {
-          const strResponse = await fetch('/api/strings');
-          const strings = await strResponse.json();
-          if (Notification.permission === 'denied') { 
-              alert(strings.warnings.notificationsBlocked); 
-              return; 
-          }
-          Notification.requestPermission().then(permission => { if (permission === 'granted') { subscribeUser(); } });
-      });
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Aguarda a variável global `strings` ser populada
+        while (typeof strings === 'undefined' || Object.keys(strings).length === 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        const notificationsBtn = document.getElementById('notifications-btn');
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            notificationsBtn.style.display = 'none';
+            return;
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+            return outputArray;
+        }
+
+        async function updateButtonUI() {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            
+            if (Notification.permission === 'denied') {
+                notificationsBtn.textContent = strings.warnings.notificationsBlocked;
+                notificationsBtn.disabled = true;
+            } else if (subscription) {
+                notificationsBtn.textContent = strings.buttons.disableNotifications;
+                notificationsBtn.disabled = false;
+            } else {
+                notificationsBtn.textContent = strings.buttons.activateNotifications;
+                notificationsBtn.disabled = false;
+            }
+        }
+        
+        async function subscribeUser() {
+            try {
+                const response = await fetch('/api/vapid_public_key');
+                const data = await response.json();
+                const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
+                const registration = await navigator.serviceWorker.ready;
+                
+                const subscription = await registration.pushManager.subscribe({ 
+                    userVisibleOnly: true, 
+                    applicationServerKey: convertedVapidKey 
+                });
+
+                await fetch('/api/subscribe', { 
+                    method: 'POST', 
+                    body: JSON.stringify(subscription), 
+                    headers: { 'Content-Type': 'application/json' } 
+                });
+
+                notificationsBtn.textContent = strings.buttons.notificationsActivated;
+                setTimeout(updateButtonUI, 1500);
+
+            } catch (error) {
+                console.error('Falha ao se inscrever:', error);
+                if (Notification.permission !== 'denied') {
+                  alert(strings.warnings.notificationsFailed);
+                }
+                updateButtonUI();
+            }
+        }
+
+        async function unsubscribeUser() {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.getSubscription();
+
+                if (subscription) {
+                    const unsubscribed = await subscription.unsubscribe();
+                    if (unsubscribed) {
+                        await fetch('/api/unsubscribe', {
+                            method: 'POST',
+                            body: JSON.stringify(subscription),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    }
+                    notificationsBtn.textContent = strings.buttons.notificationsDeactivated;
+                    setTimeout(updateButtonUI, 1500);
+                }
+            } catch (error) {
+                console.error('Falha ao se desinscrever:', error);
+                alert(strings.warnings.deactivationFailed);
+                updateButtonUI();
+            }
+        }
+
+        notificationsBtn.addEventListener('click', async () => {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+
+            if (subscription) {
+                await unsubscribeUser();
+            } else {
+                if (Notification.permission === 'denied') {
+                    alert(strings.warnings.notificationsBlocked);
+                    return;
+                }
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    await subscribeUser();
+                } else {
+                   await updateButtonUI();
+                }
+            }
+        });
+
+        // Inicializa o Service Worker e a UI do botão
+        try {
+            await navigator.serviceWorker.register('/service-worker.js');
+            await updateButtonUI();
+        } catch (err) {
+            console.error('Erro SW:', err)
+            notificationsBtn.style.display = 'none';
+        }
+    });
     </script>
 </body>
 </html>

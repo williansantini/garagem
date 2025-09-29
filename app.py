@@ -170,6 +170,14 @@ def subscribe():
         conn.commit()
     return jsonify({'message': 'Inscrição recebida.'})
 
+@app.route('/api/unsubscribe', methods=['POST'])
+def unsubscribe():
+    subscription_data = request.json
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM subscriptions WHERE subscription_json = :sub;"), {"sub": json.dumps(subscription_data)})
+        conn.commit()
+    return jsonify({'message': 'Inscrição removida com sucesso.'})
+
 @app.route('/api/stream')
 def stream():
     def event_stream():
