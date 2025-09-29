@@ -10,9 +10,12 @@
 </head>
 <body>
     <div id="status-box">
-        <h1 id="status-text"></h1>
-        <p id="status-details"></p>
-    </div>
+        <img id="status-icon" src="" alt="Ícone de Status">
+        <div id="status-text-container">
+            <h1 id="status-text"></h1>
+            <p id="status-details"></p>
+        </div>
+        </div>
 
     <div id="feira-aviso" style="display: none;">
         <p id="feira-aviso-text"></p>
@@ -57,12 +60,11 @@
             const statusDetails = document.getElementById('status-details');
             const saidaModal = document.getElementById('saida-modal');
             const warningModal = document.getElementById('warning-modal');
+            const statusIcon = document.getElementById('status-icon'); // --- FEATURE: IMAGEM DINÂMICA ---
             let currentStatus = {};
             let lastStatusString = "";
-            let strings = {}; // --- FEATURE: EXTERNALIZAR STRINGS (Objeto para armazenar as strings) ---
+            let strings = {}; 
 
-            // --- FEATURE: EXTERNALIZAR STRINGS ---
-            // Função para buscar as strings do servidor
             async function fetchStrings() {
                 try {
                     const response = await fetch('/api/strings');
@@ -70,12 +72,10 @@
                     applyStrings();
                 } catch (err) {
                     console.error("Erro ao buscar strings:", err);
-                    // Fallback para textos padrão em caso de erro
                     statusText.textContent = 'Carregando...';
                 }
             }
-
-            // Função para aplicar as strings nos elementos da página
+            
             function applyStrings() {
                 statusText.textContent = strings.status.loading;
                 document.getElementById('feira-aviso-text').innerHTML = strings.warnings.marketDay;
@@ -86,7 +86,6 @@
                 document.getElementById('back-btn-warning').textContent = strings.buttons.back;
                 document.getElementById('notifications-btn').textContent = strings.buttons.activateNotifications;
             }
-            // --- FIM DA FEATURE ---
 
             window.updateStatusDisplay = function(data) {
                 const newStatusString = JSON.stringify(data);
@@ -94,7 +93,6 @@
                 lastStatusString = newStatusString;
 
                 currentStatus = data;
-                // --- FEATURE: EXTERNALIZAR STRINGS ---
                 statusText.textContent = strings.status.garageStatus.replace('{status}', data.status);
                 if (data.status === 'OCUPADA') {
                     statusDetails.textContent = strings.status.occupiedBy
@@ -102,13 +100,14 @@
                         .replace('{car}', data.carro)
                         .replace('{timestamp}', data.timestamp);
                     statusBox.className = 'ocupada';
+                    statusIcon.src = '/static/gato_ocupado.jpg'; // --- FEATURE: IMAGEM DINÂMICA ---
                 } else {
                     statusDetails.textContent = strings.status.vacantLastFreedBy
                         .replace('{person}', data.pessoa)
                         .replace('{timestamp}', data.timestamp);
                     statusBox.className = 'livre';
+                    statusIcon.src = '/static/gato_livre.jpg'; // --- FEATURE: IMAGEM DINÂMICA ---
                 }
-                // --- FIM DA FEATURE ---
             }
 
             async function sendUpdateToServer(pessoa, carro, acao) {
@@ -125,9 +124,7 @@
                     sendUpdateToServer(novaPessoa, novoCarro, 'ENTRADA');
                 } else {
                     const warningText = document.getElementById('warning-modal-text');
-                    // --- FEATURE: EXTERNALIZAR STRINGS ---
                     warningText.textContent = strings.warnings.occupiedBySomeone.replace('{person}', currentStatus.pessoa);
-                    // --- FIM DA FEATURE ---
                     const forceButton = document.getElementById('force-occupy-btn');
                     forceButton.onclick = () => forceOccupy(novaPessoa, novoCarro);
                     openWarningModal();
@@ -190,9 +187,7 @@
                         
                         const hdLink = document.createElement('a');
                         hdLink.href = data.hdurl || data.url;
-                        // --- FEATURE: EXTERNALIZAR STRINGS ---
                         hdLink.textContent = strings.apod.viewInHd;
-                        // --- FIM DA FEATURE ---
                         hdLink.target = '_blank';
                         
                         explanationP.appendChild(hdLink);
@@ -203,9 +198,7 @@
                 }
             }
             
-            // --- FEATURE: EXTERNALIZAR STRINGS ---
-            await fetchStrings(); // Carrega as strings antes de qualquer outra coisa
-            // --- FIM DA FEATURE ---
+            await fetchStrings(); 
             
             verificarDiaDaFeira();
             fetchLatestStatus();
@@ -235,30 +228,28 @@
       }
       async function subscribeUser() {
           try {
-              const strResponse = await fetch('/api/strings'); // --- FEATURE: EXTERNALIZAR STRINGS ---
-              const strings = await strResponse.json(); // --- FEATURE: EXTERNALIZAR STRINGS ---
+              const strResponse = await fetch('/api/strings'); 
+              const strings = await strResponse.json(); 
               const response = await fetch('/api/vapid_public_key');
               const data = await response.json();
               const convertedVapidKey = urlBase64ToUint8Array(data.public_key);
               const registration = await navigator.serviceWorker.ready;
               const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: convertedVapidKey });
               await fetch('/api/subscribe', { method: 'POST', body: JSON.stringify(subscription), headers: { 'Content-Type': 'application/json' } });
-              notificationsBtn.textContent = strings.buttons.notificationsActivated; // --- FEATURE: EXTERNALIZAR STRINGS ---
+              notificationsBtn.textContent = strings.buttons.notificationsActivated; 
               notificationsBtn.disabled = true;
           } catch (error) {
               console.error('Falha ao se inscrever:', error);
-              alert(strings.warnings.notificationsFailed); // --- FEATURE: EXTERNALIZAR STRINGS ---
+              alert(strings.warnings.notificationsFailed); 
           }
       }
       notificationsBtn.addEventListener('click', async () => {
-          // --- FEATURE: EXTERNALIZAR STRINGS ---
           const strResponse = await fetch('/api/strings');
           const strings = await strResponse.json();
           if (Notification.permission === 'denied') { 
               alert(strings.warnings.notificationsBlocked); 
               return; 
           }
-          // --- FIM DA FEATURE ---
           Notification.requestPermission().then(permission => { if (permission === 'granted') { subscribeUser(); } });
       });
     </script>
