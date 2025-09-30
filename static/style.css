@@ -144,7 +144,7 @@ a:visited {
 }
 
 /* --- ESTILOS PARA A NOVA FEATURE DE GAMIFICAÇÃO --- */
-#gamification-overlay {
+.gamification-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -159,12 +159,12 @@ a:visited {
     transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
 }
 
-#gamification-overlay.hidden {
+.gamification-overlay.hidden {
     opacity: 0;
     visibility: hidden;
 }
 
-#gamification-cat {
+.gamification-overlay img {
     width: 80%;
     max-width: 350px;
     border-radius: 20px;
@@ -174,6 +174,6 @@ a:visited {
     transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); /* Efeito de "pulo" */
 }
 
-#gamification-overlay:not(.hidden) #gamification-cat {
+.gamification-overlay:not(.hidden) img {
     transform: scale(1);
 }
