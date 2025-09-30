@@ -142,3 +142,38 @@ a {
 a:visited {
     color: var(--accent-blue); /* Cor para links já visitados */
 }
+
+/* --- ESTILOS PARA A NOVA FEATURE DE GAMIFICAÇÃO --- */
+#gamification-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    opacity: 1;
+    transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
+}
+
+#gamification-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+#gamification-cat {
+    width: 80%;
+    max-width: 350px;
+    border-radius: 20px;
+    border: 4px solid white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transform: scale(0.5);
+    transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); /* Efeito de "pulo" */
+}
+
+#gamification-overlay:not(.hidden) #gamification-cat {
+    transform: scale(1);
+}

@@ -7,6 +7,7 @@
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#1c1c1e"/>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 <body>
     <div id="status-box">
@@ -15,7 +16,7 @@
             <h1 id="status-text"></h1>
             <p id="status-details"></p>
         </div>
-        </div>
+    </div>
 
     <div id="feira-aviso" style="display: none;">
         <p id="feira-aviso-text"></p>
@@ -53,6 +54,10 @@
         <p id="apod-explanation"></p>
     </div>
 
+    <div id="gamification-overlay" class="hidden">
+        <img id="gamification-cat" src="/static/confetti_cat.jpg" alt="Gato comemorando!">
+    </div>
+
     <script>
         // Variável `strings` no escopo global para ser acessível por ambos os scripts.
         let strings = {}; 
@@ -64,8 +69,10 @@
             const saidaModal = document.getElementById('saida-modal');
             const warningModal = document.getElementById('warning-modal');
             const statusIcon = document.getElementById('status-icon');
+            const gamificationOverlay = document.getElementById('gamification-overlay');
             let currentStatus = {};
             let lastStatusString = "";
+            let gamificationTimeout;
 
             async function fetchStrings() {
                 try {
@@ -88,13 +95,50 @@
                 document.getElementById('back-btn-warning').textContent = strings.buttons.back;
             }
 
+            // --- FUNÇÕES DA NOVA FEATURE ---
+            function hideGamification() {
+                clearTimeout(gamificationTimeout);
+                gamificationOverlay.classList.add('hidden');
+            }
+
+            function showGamification() {
+                // Previne múltiplos popups
+                if (!gamificationOverlay.classList.contains('hidden')) {
+                    return;
+                }
+
+                gamificationOverlay.classList.remove('hidden');
+
+                // Lança os confetes
+                confetti({
+                    particleCount: 150,
+                    spread: 90,
+                    origin: { y: 0.6 }
+                });
+
+                // Esconde após 2 segundos
+                gamificationTimeout = setTimeout(hideGamification, 2000);
+            }
+            // Adiciona evento de clique para fechar
+            gamificationOverlay.addEventListener('click', hideGamification);
+            // --- FIM DAS FUNÇÕES DA NOVA FEATURE ---
+
+
             window.updateStatusDisplay = function(data) {
                 const newStatusString = JSON.stringify(data);
                 if (newStatusString === lastStatusString) return; 
-                lastStatusString = newStatusString;
 
+                // --- LÓGICA PARA DISPARAR A FEATURE ---
+                // Verifica se o status ANTERIOR era 'OCUPADA' e o NOVO é 'LIVRE'
+                if (currentStatus.status === 'OCUPADA' && data.status !== 'OCUPADA') {
+                    showGamification();
+                }
+                // --- FIM DA LÓGICA ---
+
+                lastStatusString = newStatusString;
                 currentStatus = data;
                 statusText.textContent = strings.status.garageStatus.replace('{status}', data.status);
+
                 if (data.status === 'OCUPADA') {
                     statusDetails.textContent = strings.status.occupiedBy
                         .replace('{person}', data.pessoa)
