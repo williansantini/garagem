@@ -145,6 +145,20 @@ def update_status():
     
     return jsonify({'message': 'Status atualizado com sucesso!'})
 
+@app.route('/api/meowfact')
+def get_meow_fact():
+    try:
+        # A API em si é https://meowfacts.herokuapp.com/
+        # Não precisa de API key
+        api_url = 'https://meowfacts.herokuapp.com/'
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        error_message = f"[MEOWFACT ERROR] Falha ao buscar dados: {e}"
+        print(error_message, file=sys.stderr)
+        return jsonify({"error": "Não foi possível buscar o fato sobre gatos."}), 500
+
 @app.route('/api/apod')
 def get_apod():
     try:

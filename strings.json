@@ -39,5 +39,8 @@
   },
   "apod": {
     "viewInHd": "Ver em alta resolução."
+  },
+  "meow_facts": {
+    "title": "Meow Facts"
   }
 }

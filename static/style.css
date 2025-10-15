@@ -105,6 +105,29 @@ button:hover { filter: brightness(1.1); }
     color: var(--primary-text-color);
 }
 
+/* --- ESTILOS ADICIONADOS PELA FEATURE MEOW FACTS --- */
+#meowfacts-container {
+    margin-top: 30px;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: var(--surface-color);
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    text-align: center;
+    color: var(--secondary-text-color);
+}
+#meowfacts-container h4 {
+    font-size: 1.1em;
+    margin: 0 0 15px 0;
+    color: var(--primary-text-color);
+}
+#meowfacts-fact {
+    font-size: 1em;
+    text-align: justify;
+    line-height: 1.5;
+}
+
 /* --- ESTILOS ADICIONADOS PELA FEATURE APOD --- */
 #apod-container {
     margin-top: 30px;

@@ -48,6 +48,11 @@
     </div></div>
     <div style="margin-top: 20px; text-align: center;"><button id="notifications-btn" style="padding: 15px; font-size: 1em; background-color: var(--surface-color); color: var(--primary-text-color); border: none; border-radius: 12px;"></button></div>
 
+    <div id="meowfacts-container" style="display: none;">
+        <h4 id="meowfacts-title"></h4>
+        <p id="meowfacts-fact"></p>
+    </div>
+
     <div id="apod-container" style="display: none;">
         <h4 id="apod-title"></h4>
         <img id="apod-image" src="" alt="Imagem Astronômica do Dia">
@@ -103,6 +108,7 @@
                 document.getElementById('cancel-btn-saida').textContent = strings.buttons.cancel;
                 document.getElementById('force-occupy-btn').textContent = strings.buttons.releaseAndOccupy;
                 document.getElementById('back-btn-warning').textContent = strings.buttons.back;
+                document.getElementById('meowfacts-title').textContent = strings.meow_facts.title;
             }
 
             // --- FUNÇÕES DA NOVA FEATURE DE GAMIFICAÇÃO ---
@@ -234,6 +240,22 @@
                     document.getElementById('feira-aviso').style.display = 'block';
                 }
             }
+
+            async function fetchMeowFact() {
+                try {
+                    const response = await fetch('/api/meowfact');
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    
+                    if (data.data && data.data.length > 0) {
+                        document.getElementById('meowfacts-container').style.display = 'block';
+                        document.getElementById('meowfacts-fact').textContent = data.data[0];
+                    }
+
+                } catch (err) {
+                    console.error("Erro ao buscar Meow Fact:", err);
+                }
+            }
             
             async function fetchApod() {
                 try {
@@ -266,6 +288,7 @@
             
             verificarDiaDaFeira();
             fetchLatestStatus();
+            fetchMeowFact();
             fetchApod(); 
             setInterval(fetchLatestStatus, 5000);
 
